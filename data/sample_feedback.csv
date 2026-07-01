@@ -1,0 +1,11 @@
+text,source,date,user_id
+"App crashes every time I try to export to PDF on iOS 17. Happens every single time.",mobile_app,2026-06-01,user_001
+"Would love dark mode support. Not urgent but would use it daily.",web_app,2026-06-02,user_002
+"Dashboard loads so slowly — over 30 seconds. Very frustrating in client meetings.",web_app,2026-06-03,user_003
+"The new filter feature is fantastic! Saves me hours every week. Great work team.",web_app,2026-06-04,user_004
+"Login keeps failing with 401 errors. Our entire team of 15 is blocked right now. URGENT.",web_app,2026-06-05,user_005
+"Please add Slack integration for notifications. Email is too noisy for our team.",web_app,2026-06-06,user_006
+"Search results are completely irrelevant. I can never find what I'm looking for.",mobile_app,2026-06-07,user_007
+"Analytics numbers don't match our internal data. Revenue figures are wrong by 15%.",web_app,2026-06-08,user_008
+"We need to export more than 500 rows. The limit is a serious blocker for enterprise use.",web_app,2026-06-09,user_009
+"Accidentally deleted a project and there's no way to recover it. Lost 3 weeks of work.",web_app,2026-06-10,user_010
