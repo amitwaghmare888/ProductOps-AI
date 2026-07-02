@@ -7,6 +7,7 @@ Outputs structured JSON analysis into session state via output_key.
 """
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
+from google.genai import types as genai_types
 
 from backend.agents.tools.analysis_tools import (
     categorize_feedback,
@@ -61,5 +62,8 @@ feedback_analyzer_agent = LlmAgent(
         FunctionTool(detect_sentiment),
         FunctionTool(extract_entities),
     ],
+    generate_content_config=genai_types.GenerateContentConfig(
+        response_mime_type="application/json",
+    ),
     output_key="analysis_result",
 )

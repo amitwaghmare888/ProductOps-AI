@@ -18,12 +18,14 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy import select, desc
+from sqlalchemy import func, select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import (
     get_db,
     PipelineRun,
+    FeedbackItem,
+    EngineeringTask,
     EvaluationRun as EvaluationRunModel,
 )
 from backend.api.schemas import (
@@ -35,6 +37,9 @@ from backend.api.schemas import (
     EvaluationRequest,
     EvaluationResponse,
     HealthResponse,
+    FeedbackItemResponse,
+    EngineeringTaskResponse,
+    AnalyticsSummaryResponse,
 )
 from backend.agents.orchestrator import run_pipeline
 from backend.mcp.client import mcp_client
@@ -115,6 +120,12 @@ async def _run_pipeline_bg(run_id: str, feedback_text: str):
             await db.execute(stmt)
             await db.commit()
 
+            # Persist structured outputs to relational tables (best-effort)
+            try:
+                await _persist_structured_outputs(db, run_id, result)
+            except Exception:
+                pass  # Non-fatal: pipeline_runs record is already saved
+
         except Exception as e:
             stmt = (
                 PipelineRun.__table__.update()
@@ -123,6 +134,101 @@ async def _run_pipeline_bg(run_id: str, feedback_text: str):
             )
             await db.execute(stmt)
             await db.commit()
+
+
+async def _persist_structured_outputs(
+    db: AsyncSession,
+    run_id: str,
+    result: dict,
+) -> None:
+    """
+    Persist structured pipeline outputs to feedback_items and engineering_tasks.
+
+    IDs use a run_id prefix (first 8 chars) to guarantee global uniqueness
+    across runs, while preserving the original feedback_id linkage between
+    items and tasks.
+
+    Silently skips if agent outputs are unstructured (JSON parse failed /
+    LLM drift). This is called from _run_pipeline_bg as a best-effort step
+    after the main pipeline_runs record is already committed.
+
+    Args:
+        db: Active async database session.
+        run_id: Pipeline run ID (used as ID namespace prefix).
+        result: Full pipeline result dict from run_pipeline().
+    """
+    analysis = result.get("analysis", {})
+    prioritization = result.get("prioritization", {})
+    planning = result.get("planning", {})
+    prefix = run_id[:8]
+
+    # Skip if the analysis stage output is unstructured (parse failure)
+    if not isinstance(analysis, dict) or "raw_output" in analysis:
+        return
+
+    # Build RICE/priority lookup keyed by the LLM-assigned feedback_id
+    priority_lookup: dict[str, dict] = {}
+    if isinstance(prioritization, dict):
+        for rank, item in enumerate(
+            prioritization.get("prioritized_items", []), start=1
+        ):
+            fid = str(item.get("feedback_id", ""))
+            if fid:
+                priority_lookup[fid] = {
+                    "rice_score": item.get("rice_score"),
+                    "priority_rank": rank,
+                }
+
+    # ── FeedbackItem ─────────────────────────────────────────────────────────
+    original_fid = str(
+        analysis.get("feedback_id", f"fb_{uuid.uuid4().hex[:8]}")
+    )
+    db_fid = f"{prefix}_{original_fid}"
+    pdata = priority_lookup.get(original_fid, {})
+    entities_raw = analysis.get("entities", [])
+
+    db.add(FeedbackItem(
+        id=db_fid,
+        pipeline_run_id=run_id,
+        raw_text=str(analysis.get("raw_text", ""))[:5000],
+        category=analysis.get("category"),
+        sentiment=analysis.get("sentiment"),
+        sentiment_score=(
+            float(analysis["sentiment_score"])
+            if analysis.get("sentiment_score") is not None
+            else None
+        ),
+        entities=json.dumps(entities_raw) if entities_raw else None,
+        severity=analysis.get("severity"),
+        rice_score=(
+            float(pdata["rice_score"])
+            if pdata.get("rice_score") is not None
+            else None
+        ),
+        priority_rank=pdata.get("priority_rank"),
+    ))
+
+    # ── EngineeringTasks ─────────────────────────────────────────────────────
+    if isinstance(planning, dict) and "tasks" in planning:
+        for task in planning.get("tasks", []):
+            raw_tid = str(task.get("task_id", f"task_{uuid.uuid4().hex[:8]}"))
+            task_fid = str(task.get("feedback_id", ""))
+            acceptance = task.get("acceptance_criteria", [])
+
+            db.add(EngineeringTask(
+                id=f"{prefix}_{raw_tid}",
+                pipeline_run_id=run_id,
+                # Map original feedback_id to the namespaced DB FeedbackItem id
+                feedback_item_id=f"{prefix}_{task_fid}" if task_fid else db_fid,
+                title=str(task.get("title", "Untitled Task"))[:500],
+                description=task.get("description"),
+                technical_approach=task.get("technical_approach"),
+                effort_estimate=task.get("effort_estimate"),
+                priority=task.get("priority"),
+                acceptance_criteria=json.dumps(acceptance) if acceptance else None,
+            ))
+
+    await db.commit()
 
 
 @router.get("/pipeline", response_model=list[PipelineListItem])
@@ -309,3 +415,116 @@ async def get_recent_memories():
 @router.get("/mcp/stats")
 async def get_mcp_stats():
     return await mcp_client.get_stats()
+
+
+# ─── Pipeline Items & Tasks ───────────────────────────────────────────────────
+
+@router.get("/pipeline/{run_id}/items", response_model=list[FeedbackItemResponse])
+async def get_pipeline_items(run_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Return all feedback items persisted for a pipeline run.
+    Populated after a completed run via _persist_structured_outputs.
+    """
+    result = await db.execute(
+        select(FeedbackItem).where(FeedbackItem.pipeline_run_id == run_id)
+    )
+    items = result.scalars().all()
+    return [
+        FeedbackItemResponse(
+            id=i.id,
+            pipeline_run_id=i.pipeline_run_id,
+            raw_text=i.raw_text,
+            category=i.category,
+            sentiment=i.sentiment,
+            sentiment_score=i.sentiment_score,
+            entities=json.loads(i.entities) if i.entities else [],
+            severity=i.severity,
+            rice_score=i.rice_score,
+            priority_rank=i.priority_rank,
+            created_at=i.created_at.isoformat() if i.created_at else "",
+        )
+        for i in items
+    ]
+
+
+@router.get("/pipeline/{run_id}/tasks", response_model=list[EngineeringTaskResponse])
+async def get_pipeline_tasks(run_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Return all engineering tasks persisted for a pipeline run.
+    Populated after a completed run via _persist_structured_outputs.
+    """
+    result = await db.execute(
+        select(EngineeringTask).where(EngineeringTask.pipeline_run_id == run_id)
+    )
+    tasks = result.scalars().all()
+    return [
+        EngineeringTaskResponse(
+            id=t.id,
+            pipeline_run_id=t.pipeline_run_id,
+            feedback_item_id=t.feedback_item_id,
+            title=t.title,
+            description=t.description,
+            technical_approach=t.technical_approach,
+            effort_estimate=t.effort_estimate,
+            priority=t.priority,
+            acceptance_criteria=json.loads(t.acceptance_criteria)
+            if t.acceptance_criteria
+            else [],
+        )
+        for t in tasks
+    ]
+
+
+# ─── Analytics ────────────────────────────────────────────────────────────────
+
+@router.get("/analytics/summary", response_model=AnalyticsSummaryResponse)
+async def get_analytics_summary(db: AsyncSession = Depends(get_db)):
+    """
+    Aggregate analytics across all pipeline runs.
+    Returns run counts by status, item/task totals, avg duration, and
+    the top 5 feedback categories seen across all runs.
+    """
+    total = (await db.execute(
+        select(func.count()).select_from(PipelineRun)
+    )).scalar_one()
+    completed = (await db.execute(
+        select(func.count()).select_from(PipelineRun).where(PipelineRun.status == "completed")
+    )).scalar_one()
+    failed = (await db.execute(
+        select(func.count()).select_from(PipelineRun).where(PipelineRun.status == "failed")
+    )).scalar_one()
+    running = (await db.execute(
+        select(func.count()).select_from(PipelineRun).where(PipelineRun.status == "running")
+    )).scalar_one()
+
+    total_items = (await db.execute(
+        select(func.count()).select_from(FeedbackItem)
+    )).scalar_one()
+    total_tasks = (await db.execute(
+        select(func.count()).select_from(EngineeringTask)
+    )).scalar_one()
+
+    avg_dur = (await db.execute(
+        select(func.avg(PipelineRun.duration_ms)).where(PipelineRun.status == "completed")
+    )).scalar_one()
+
+    # Top 5 feedback categories across all persisted items
+    cat_rows = (await db.execute(
+        select(FeedbackItem.category, func.count().label("count"))
+        .where(FeedbackItem.category.is_not(None))
+        .group_by(FeedbackItem.category)
+        .order_by(desc("count"))
+        .limit(5)
+    )).all()
+    top_categories = [{"category": r.category, "count": r.count} for r in cat_rows]
+
+    return AnalyticsSummaryResponse(
+        total_runs=total,
+        completed_runs=completed,
+        failed_runs=failed,
+        running_runs=running,
+        total_feedback_items=total_items,
+        total_engineering_tasks=total_tasks,
+        avg_duration_ms=float(avg_dur) if avg_dur is not None else None,
+        top_categories=top_categories,
+    )

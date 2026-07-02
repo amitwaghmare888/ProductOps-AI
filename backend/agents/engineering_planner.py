@@ -7,6 +7,7 @@ Outputs the engineering plan into session state via output_key.
 """
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
+from google.genai import types as genai_types
 
 from backend.agents.tools.planner_tools import (
     generate_engineering_tasks,
@@ -71,5 +72,8 @@ engineering_planner_agent = LlmAgent(
         FunctionTool(estimate_effort),
         FunctionTool(generate_release_notes),
     ],
+    generate_content_config=genai_types.GenerateContentConfig(
+        response_mime_type="application/json",
+    ),
     output_key="planning_result",
 )

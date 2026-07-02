@@ -72,3 +72,43 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     agents: list[str]
+
+
+class FeedbackItemResponse(BaseModel):
+    """Persisted feedback item from a pipeline run."""
+    id: str
+    pipeline_run_id: str
+    raw_text: str
+    category: str | None = None
+    sentiment: str | None = None
+    sentiment_score: float | None = None
+    entities: list[Any] = []
+    severity: str | None = None
+    rice_score: float | None = None
+    priority_rank: int | None = None
+    created_at: str
+
+
+class EngineeringTaskResponse(BaseModel):
+    """Persisted engineering task generated from a pipeline run."""
+    id: str
+    pipeline_run_id: str
+    feedback_item_id: str | None = None
+    title: str
+    description: str | None = None
+    technical_approach: str | None = None
+    effort_estimate: str | None = None
+    priority: str | None = None
+    acceptance_criteria: list[str] = []
+
+
+class AnalyticsSummaryResponse(BaseModel):
+    """Aggregate analytics across all pipeline runs."""
+    total_runs: int
+    completed_runs: int
+    failed_runs: int
+    running_runs: int
+    total_feedback_items: int
+    total_engineering_tasks: int
+    avg_duration_ms: float | None = None
+    top_categories: list[dict[str, Any]] = []

@@ -7,6 +7,7 @@ Outputs prioritized ranking into session state via output_key.
 """
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
+from google.genai import types as genai_types
 
 from backend.agents.tools.priority_tools import (
     calculate_rice_score,
@@ -78,5 +79,8 @@ business_prioritizer_agent = LlmAgent(
         FunctionTool(estimate_business_impact),
         FunctionTool(rank_feedback_items),
     ],
+    generate_content_config=genai_types.GenerateContentConfig(
+        response_mime_type="application/json",
+    ),
     output_key="prioritization_result",
 )
