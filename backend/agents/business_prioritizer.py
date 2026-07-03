@@ -66,21 +66,22 @@ Recommended action mapping:
 Output ONLY the JSON. No commentary.
 """
 
-business_prioritizer_agent = LlmAgent(
-    name="business_prioritizer",
-    model=settings.agent_model,
-    description=(
-        "Prioritizes analyzed feedback using RICE scoring, business impact "
-        "estimation, and urgency-based ranking."
-    ),
-    instruction=INSTRUCTION,
-    tools=[
-        FunctionTool(calculate_rice_score),
-        FunctionTool(estimate_business_impact),
-        FunctionTool(rank_feedback_items),
-    ],
-    generate_content_config=genai_types.GenerateContentConfig(
-        response_mime_type="application/json",
-    ),
-    output_key="prioritization_result",
-)
+def create_business_prioritizer_agent() -> LlmAgent:
+    return LlmAgent(
+        name="business_prioritizer",
+        model=settings.agent_model,
+        description=(
+            "Prioritizes analyzed feedback using RICE scoring, business impact "
+            "estimation, and urgency-based ranking."
+        ),
+        instruction=INSTRUCTION,
+        tools=[
+            FunctionTool(calculate_rice_score),
+            FunctionTool(estimate_business_impact),
+            FunctionTool(rank_feedback_items),
+        ],
+        generate_content_config=genai_types.GenerateContentConfig(
+            response_mime_type="application/json",
+        ),
+        output_key="prioritization_result",
+    )

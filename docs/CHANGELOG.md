@@ -44,3 +44,29 @@ All notable changes to this project will be documented in this file.
 ### No Breaking Changes
 - All existing API endpoints and response shapes unchanged.
 - No new dependencies introduced.
+
+## [0.4.1] — 2026-07-03
+
+### Added: LLM Gateway (v0.4.1)
+- `backend/gateway/providers/base.py` — `LLMProvider` ABC + `ProviderMetrics` + `ProviderResponse` dataclasses. Provider-agnostic interface for future OpenAI/Claude implementations.
+- `backend/gateway/providers/gemini.py` — `GeminiProvider`: Gemini implementation with per-key metrics tracking, circuit breaker (60 s cooldown on 429/quota errors), and model fallback (retries with `agent_model_fallback` on non-rate-limit failures).
+- `backend/gateway/llm_gateway.py` — `LLMGateway` singleton: round-robin key pool, `generate()` (async), `generate_sync()`, `get_stats()`. `from_gemini_keys()` factory for initialization.
+- `backend/gateway/__init__.py` — Public API: `llm_gateway`, `init_gateway()`.
+- `backend/api/schemas.py` — `GatewayKeyStats`, `GatewayStatsResponse` Pydantic models.
+- `backend/api/routes.py` — `GET /api/v1/gateway/stats` endpoint.
+
+### Modified
+- `backend/config.py` — Added `google_api_keys: str` (comma-separated pool), `agent_model_fallback: str` (default `gemini-1.5-flash`), `use_langgraph: bool` (feature flag, default `False`), `gateway_api_keys_list` property.
+- `backend/main.py` — `init_gateway()` called in lifespan. Version bumped to `0.4.1`. Gateway stats URL printed at startup.
+
+### Features
+- **Key pooling**: Set `GOOGLE_API_KEYS=key1,key2,key3` in `.env`. Gateway distributes requests round-robin. Falls back to `GOOGLE_API_KEY` when `GOOGLE_API_KEYS` is not set.
+- **Circuit breaker**: Rate-limited keys are automatically excluded from routing for 60 s and then re-instated.
+- **Model fallback**: Any generation call can specify `fallback_model`; used automatically on non-rate-limit failures.
+- **Metrics**: Per-key request counts, error rates, avg latency, fallback counts, rate-limit status exposed at `GET /gateway/stats`.
+- **Feature flag**: `USE_LANGGRAPH=false` (default) keeps the existing ADK SequentialAgent path active. Ready for v0.4.2.
+
+### Unchanged
+- All ADK agent files untouched.
+- All existing API contracts preserved.
+- No new pip dependencies required (uses `google-genai` already installed).

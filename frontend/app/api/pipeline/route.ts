@@ -1,4 +1,4 @@
-const BACKEND = process.env.BACKEND_URL || 'http://localhost:8000';
+import { BACKEND_URL as BACKEND } from '@/lib/api';
 
 export async function GET() {
   const res = await fetch(`${BACKEND}/api/v1/pipeline`, { cache: 'no-store' });

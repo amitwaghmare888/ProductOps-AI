@@ -112,3 +112,29 @@ class AnalyticsSummaryResponse(BaseModel):
     total_engineering_tasks: int
     avg_duration_ms: float | None = None
     top_categories: list[dict[str, Any]] = []
+
+
+class GatewayKeyStats(BaseModel):
+    """Per-key metrics for a single LLM Gateway provider."""
+    key_id: str
+    provider: str
+    total_requests: int
+    successful_requests: int
+    failed_requests: int
+    rate_limited_requests: int
+    fallback_requests: int
+    success_rate: float
+    avg_latency_ms: float
+    is_rate_limited: bool
+    rate_limited_until: str | None = None
+    last_error: str | None = None
+
+
+class GatewayStatsResponse(BaseModel):
+    """Aggregate LLM Gateway metrics — all providers and keys combined."""
+    total_providers: int
+    active_providers: int
+    aggregate_requests: int
+    aggregate_errors: int
+    aggregate_success_rate: float
+    providers: list[GatewayKeyStats]

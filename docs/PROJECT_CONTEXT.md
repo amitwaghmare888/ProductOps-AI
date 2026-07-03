@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT.md
 
 > Permanent source of truth for ProductOps AI. Everything here is verified from code.
-> Last updated: 2026-07-03 — v0.3 complete (Persistent Pipeline Storage)
+> Last updated: 2026-07-03 — v0.4.1 complete (LLM Gateway)
 
 ---
 
@@ -153,6 +153,11 @@ productops-ai/
 │   ├── utils/                       # [v0.2] Production utilities
 │   │   ├── retry.py                 # async_retry: exponential backoff decorator
 │   │   └── output_schemas.py        # Pydantic v2 schemas for all 3 agent outputs
+│   ├── gateway/                     # [v0.4.1] LLM Gateway
+│   │   ├── llm_gateway.py           # LLMGateway singleton: round-robin pool, metrics
+│   │   └── providers/
+│   │       ├── base.py              # LLMProvider ABC + ProviderMetrics + ProviderResponse
+│   │       └── gemini.py            # GeminiProvider: circuit breaker + model fallback
 │   ├── api/
 │   │   ├── routes.py                # All FastAPI route handlers
 │   │   └── schemas.py               # Pydantic request/response models
@@ -216,7 +221,8 @@ All routes prefixed `/api/v1`. Backend runs on port `8000` by default.
 | GET | `/api/v1/mcp/stats` | Get MCP feedback store stats |
 | GET | `/api/v1/pipeline/{run_id}/items` | **[v0.3]** Persisted feedback items for a run |
 | GET | `/api/v1/pipeline/{run_id}/tasks` | **[v0.3]** Persisted engineering tasks for a run |
-| GET | `/api/v1/analytics/summary` | **[v0.3]** Aggregate stats: run counts, avg duration, top categories |
+| GET | `/api/v1/analytics/summary`       | **[v0.3]** Aggregate stats: run counts, avg duration, top categories |
+| GET | `/api/v1/gateway/stats`           | **[v0.4.1]** LLM Gateway: per-key request metrics, circuit-breaker status |
 
 API docs auto-generated at `http://localhost:8000/docs`.
 

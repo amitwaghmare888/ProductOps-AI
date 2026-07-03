@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+import { API_BASE as API } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PipelineRun {

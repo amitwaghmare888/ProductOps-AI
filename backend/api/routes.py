@@ -2,15 +2,19 @@
 FastAPI routes for the ProductOps AI backend.
 
 Endpoints:
-- GET  /health              — Health check
-- POST /pipeline            — Start a pipeline run
-- GET  /pipeline            — List recent runs
-- GET  /pipeline/{run_id}   — Get pipeline result
-- POST /feedback/upload     — Upload CSV/JSON feedback file
-- POST /evaluate            — Run evaluation framework
-- GET  /evaluate            — List past evaluations
-- GET  /memory/recent       — Get recent agent memories
-- GET  /mcp/stats           — Get MCP feedback stats
+- GET  /health                     — Health check
+- POST /pipeline                   — Start a pipeline run
+- GET  /pipeline                   — List recent runs
+- GET  /pipeline/{run_id}          — Get pipeline result
+- GET  /pipeline/{run_id}/items    — Persisted feedback items for a run
+- GET  /pipeline/{run_id}/tasks    — Persisted engineering tasks for a run
+- POST /feedback/upload            — Upload CSV/JSON feedback file
+- POST /evaluate                   — Run evaluation framework
+- GET  /evaluate                   — List past evaluations
+- GET  /memory/recent              — Get recent agent memories
+- GET  /mcp/stats                  — Get MCP feedback stats
+- GET  /analytics/summary          — Aggregate analytics
+- GET  /gateway/stats              — [v0.4.1] LLM Gateway metrics
 """
 import asyncio
 import json
@@ -40,10 +44,12 @@ from backend.api.schemas import (
     FeedbackItemResponse,
     EngineeringTaskResponse,
     AnalyticsSummaryResponse,
+    GatewayStatsResponse,
 )
 from backend.agents.orchestrator import run_pipeline
 from backend.mcp.client import mcp_client
 from backend.memory.memory_service import memory_service
+from backend.gateway import llm_gateway
 
 router = APIRouter()
 
@@ -416,6 +422,28 @@ async def get_recent_memories():
 async def get_mcp_stats():
     return await mcp_client.get_stats()
 
+
+# ─── LLM Gateway ──────────────────────────────────────────────────────────
+
+@router.get("/gateway/stats", response_model=GatewayStatsResponse)
+async def get_gateway_stats():
+    """
+    [v0.4.1] LLM Gateway metrics for all configured API keys.
+
+    Returns per-key statistics including request counts, error rates,
+    average latency, circuit-breaker status, and model fallback usage.
+    Useful for monitoring API key health and load distribution across
+    a multi-key Gemini pool.
+    """
+    raw = llm_gateway.get_stats()
+    return GatewayStatsResponse(
+        total_providers=raw["total_providers"],
+        active_providers=raw["active_providers"],
+        aggregate_requests=raw["aggregate_requests"],
+        aggregate_errors=raw["aggregate_errors"],
+        aggregate_success_rate=raw["aggregate_success_rate"],
+        providers=raw["providers"],
+    )
 
 # ─── Pipeline Items & Tasks ───────────────────────────────────────────────────
 

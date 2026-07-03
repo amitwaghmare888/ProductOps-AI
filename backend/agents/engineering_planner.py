@@ -59,21 +59,22 @@ Output ONLY this JSON (no extra text):
 Output ONLY the JSON. No commentary.
 """
 
-engineering_planner_agent = LlmAgent(
-    name="engineering_planner",
-    model=settings.agent_model,
-    description=(
-        "Generates engineering tasks, effort estimates, and release notes "
-        "from prioritized feedback items."
-    ),
-    instruction=INSTRUCTION,
-    tools=[
-        FunctionTool(generate_engineering_tasks),
-        FunctionTool(estimate_effort),
-        FunctionTool(generate_release_notes),
-    ],
-    generate_content_config=genai_types.GenerateContentConfig(
-        response_mime_type="application/json",
-    ),
-    output_key="planning_result",
-)
+def create_engineering_planner_agent() -> LlmAgent:
+    return LlmAgent(
+        name="engineering_planner",
+        model=settings.agent_model,
+        description=(
+            "Generates engineering tasks, effort estimates, and release notes "
+            "from prioritized feedback items."
+        ),
+        instruction=INSTRUCTION,
+        tools=[
+            FunctionTool(generate_engineering_tasks),
+            FunctionTool(estimate_effort),
+            FunctionTool(generate_release_notes),
+        ],
+        generate_content_config=genai_types.GenerateContentConfig(
+            response_mime_type="application/json",
+        ),
+        output_key="planning_result",
+    )

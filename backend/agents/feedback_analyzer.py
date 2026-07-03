@@ -49,21 +49,22 @@ Rules:
 - Output ONLY the JSON object, nothing else.
 """
 
-feedback_analyzer_agent = LlmAgent(
-    name="feedback_analyzer",
-    model=settings.agent_model,
-    description=(
-        "Analyzes raw customer feedback to extract category, sentiment, "
-        "entities, severity, and a structured summary."
-    ),
-    instruction=INSTRUCTION,
-    tools=[
-        FunctionTool(categorize_feedback),
-        FunctionTool(detect_sentiment),
-        FunctionTool(extract_entities),
-    ],
-    generate_content_config=genai_types.GenerateContentConfig(
-        response_mime_type="application/json",
-    ),
-    output_key="analysis_result",
-)
+def create_feedback_analyzer_agent() -> LlmAgent:
+    return LlmAgent(
+        name="feedback_analyzer",
+        model=settings.agent_model,
+        description=(
+            "Analyzes raw customer feedback to extract category, sentiment, "
+            "entities, severity, and a structured summary."
+        ),
+        instruction=INSTRUCTION,
+        tools=[
+            FunctionTool(categorize_feedback),
+            FunctionTool(detect_sentiment),
+            FunctionTool(extract_entities),
+        ],
+        generate_content_config=genai_types.GenerateContentConfig(
+            response_mime_type="application/json",
+        ),
+        output_key="analysis_result",
+    )
