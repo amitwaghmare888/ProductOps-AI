@@ -71,8 +71,8 @@ function LoadingSpinner() {
 
 // ─── Tab panels ───────────────────────────────────────────────────────────────
 function AnalysisPanel({ analysis }: { analysis: Record<string, unknown> }) {
-  const entities = (analysis.entities as string[]) || [];
-  const platforms = (analysis.platforms as string[]) || [];
+  const entities: string[] = Array.isArray(analysis.entities) ? analysis.entities.map(String) : [];
+  const platforms: string[] = Array.isArray(analysis.platforms) ? analysis.platforms.map(String) : [];
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -124,7 +124,7 @@ function AnalysisPanel({ analysis }: { analysis: Record<string, unknown> }) {
       )}
 
       {/* Needs review warning */}
-      {analysis.needs_review && (
+      {Boolean(analysis.needs_review) && (
         <div className="card-sm border-amber-500/20 bg-amber-500/5 flex items-center gap-2">
           <svg className="w-4 h-4 text-amber-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -144,7 +144,7 @@ function AnalysisPanel({ analysis }: { analysis: Record<string, unknown> }) {
 }
 
 function PrioritizationPanel({ prioritization }: { prioritization: Record<string, unknown> }) {
-  const items = (prioritization.prioritized_items as Record<string, unknown>[]) || [];
+  const items: Record<string, unknown>[] = Array.isArray(prioritization.prioritized_items) ? prioritization.prioritized_items : [];
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -180,8 +180,8 @@ function PrioritizationPanel({ prioritization }: { prioritization: Record<string
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {item.revenue_risk && <span className="badge-critical">Revenue Risk</span>}
-            {item.retention_risk && <span className="badge-high">Retention Risk</span>}
+            {Boolean(item.revenue_risk) && <span className="badge-critical">Revenue Risk</span>}
+            {Boolean(item.retention_risk) && <span className="badge-high">Retention Risk</span>}
             <span className="badge-violet">
               {(item.recommended_action as string)?.replace(/_/g, ' ')}
             </span>
@@ -210,7 +210,7 @@ function PrioritizationPanel({ prioritization }: { prioritization: Record<string
 }
 
 function PlanningPanel({ planning }: { planning: Record<string, unknown> }) {
-  const tasks = (planning.tasks as Record<string, unknown>[]) || [];
+  const tasks: Record<string, unknown>[] = Array.isArray(planning.tasks) ? planning.tasks : [];
   const totalPoints = planning.total_story_points as number;
 
   return (
@@ -233,7 +233,7 @@ function PlanningPanel({ planning }: { planning: Record<string, unknown> }) {
 
       {/* Tasks */}
       {tasks.map((task, idx) => {
-        const criteria = (task.acceptance_criteria as string[]) || [];
+        const criteria: string[] = Array.isArray(task.acceptance_criteria) ? task.acceptance_criteria.map(String) : [];
         return (
           <div key={idx} className="card space-y-3">
             <div className="flex items-start justify-between gap-3">
@@ -295,11 +295,16 @@ function PlanningPanel({ planning }: { planning: Record<string, unknown> }) {
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
+import { ReplayProvider } from '@/components/replay/ReplayProvider';
+import { WatchAIThink } from '@/components/replay/WatchAIThink';
+import { DEMO_REPLAY_STEPS } from '@/lib/replayData';
+
 export default function PipelineDetailPage() {
   const { id } = useParams();
   const [run, setRun] = useState<PipelineResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'analysis' | 'prioritization' | 'planning'>('analysis');
+  const [watchMode, setWatchMode] = useState<'live' | 'replay' | null>(null);
 
   const fetchRun = async () => {
     try {
@@ -350,6 +355,17 @@ export default function PipelineDetailPage() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6 animate-fade-in">
+      {/* Overlay */}
+      {watchMode && (
+        <ReplayProvider initialSteps={watchMode === 'replay' ? DEMO_REPLAY_STEPS : []}>
+          <WatchAIThink 
+            mode={watchMode} 
+            runId={typeof id === 'string' ? id : undefined} 
+            onClose={() => setWatchMode(null)} 
+          />
+        </ReplayProvider>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -370,6 +386,29 @@ export default function PipelineDetailPage() {
           )}
           <p className="text-xs text-[#4a4a6a]">{run.input_source}</p>
         </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-3">
+        {run.status === 'running' && (
+          <button 
+            onClick={() => setWatchMode('live')}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 text-sm font-medium transition-colors border border-violet-500/20"
+          >
+            <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse-dot" />
+            Watch Live Execution
+          </button>
+        )}
+        <button 
+          onClick={() => setWatchMode('replay')}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1a1a26] text-[#f0f0f8] hover:bg-[#2a2a3a] text-sm font-medium transition-colors border border-[#2a2a3a]"
+        >
+          <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Replay Demo Sequence
+        </button>
       </div>
 
       {/* Running state */}
