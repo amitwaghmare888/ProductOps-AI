@@ -1,7 +1,8 @@
 # PROJECT_CONTEXT.md
 
 > Permanent source of truth for ProductOps AI. Everything here is verified from code.
-> Last updated: 2026-07-03 — v0.4.1 complete (LLM Gateway)
+> Last updated: 2026-07-04 — Milestone 1 complete (Frontend Design System Foundation)
+
 
 ---
 
@@ -37,6 +38,13 @@ Product teams receive unstructured customer feedback at scale. Converting that f
 - Pipeline detail view with 3 tabs: Analysis, Prioritization, Engineering Plan
 - Evaluation dashboard with pass/fail scores per stage
 - CLI smoke test (`scripts/test_pipeline.py`)
+- **[M1]** `GlowCard` — reusable card primitive with `rAF` cursor-tracking glow, 5 variants, 3 sizes
+- **[M1]** `CountUp` — accessible animated number counter with `IntersectionObserver` + reduced-motion support
+- **[M1]** `StaggerChildren` — sequential entrance animation wrapper, configurable delay/direction
+- **[M1]** `ReplayProvider` / `useReplay` — time-driven step-replay context for agent execution visualization
+- **[M1]** `replayData.ts` — 20-step demo replay sequence calibrated to real ADK pipeline timing
+- **[M1]** `useExecution` hook — polling hook for live per-stage pipeline tracking with elapsed timer
+
 
 ---
 
@@ -165,12 +173,27 @@ productops-ai/
 │   ├── database.py                  # SQLAlchemy models + init_db()
 │   └── main.py                      # FastAPI app factory + CORS + lifespan
 ├── frontend/
-│   └── app/
-│       ├── page.tsx                 # Dashboard: run list + feedback submit form
-│       ├── pipeline/[id]/page.tsx   # Pipeline detail — 3 tabs
-│       ├── evaluate/page.tsx        # Evaluation dashboard
-│       ├── layout.tsx               # Root layout
-│       └── globals.css              # Tailwind base + all custom utility classes
+│   ├── app/
+│   │   ├── page.tsx                 # Dashboard: run list + feedback submit form
+│   │   ├── pipeline/[id]/page.tsx   # Pipeline detail — 3 tabs
+│   │   ├── evaluate/page.tsx        # Evaluation dashboard
+│   │   ├── layout.tsx               # Root layout
+│   │   └── globals.css              # Tailwind base + all custom utility classes + M1 animations
+│   ├── components/                  # [M1] Reusable UI components
+│   │   ├── ui/
+│   │   │   ├── GlowCard.tsx         # [M1] Radial glow card — rAF mouse-tracking, 5 variants
+│   │   │   ├── CountUp.tsx          # [M1] Animated counter — rAF + IntersectionObserver
+│   │   │   ├── StaggerChildren.tsx  # [M1] Sequential entrance animation wrapper
+│   │   │   └── index.ts             # [M1] Barrel export
+│   │   └── replay/
+│   │       └── ReplayProvider.tsx   # [M1] Time-driven replay context + useReplay hook
+│   ├── hooks/                       # [M1] Custom React hooks
+│   │   └── useExecution.ts          # [M1] Live pipeline polling hook
+│   ├── lib/
+│   │   ├── api.ts                   # API base URL constant
+│   │   └── replayData.ts            # [M1] 20-step demo replay sequence
+│   └── tailwind.config.js           # Tailwind theme — M1 animation tokens added
+
 ├── data/
 │   └── sample_feedback.csv          # Demo CSV for upload
 ├── skills/

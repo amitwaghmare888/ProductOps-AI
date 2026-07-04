@@ -106,3 +106,132 @@
   /* Divider */
   .divider { @apply border-t border-[#2a2a3a]; }
 }
+
+/* ─── Milestone 1: Design System Animations ────────────────────────────────── */
+/* Keyframes declared at @layer base to avoid specificity collisions.           */
+
+@layer base {
+  /* Fade + slide up — primary entrance animation */
+  @keyframes m1-fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0);    }
+  }
+
+  /* Fade + slide down */
+  @keyframes m1-fade-down {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0);     }
+  }
+
+  /* Fade + slide in from left */
+  @keyframes m1-fade-left {
+    from { opacity: 0; transform: translateX(12px); }
+    to   { opacity: 1; transform: translateX(0);    }
+  }
+
+  /* Fade + slide in from right */
+  @keyframes m1-fade-right {
+    from { opacity: 0; transform: translateX(-12px); }
+    to   { opacity: 1; transform: translateX(0);     }
+  }
+
+  /* Scale pop — for stats / metric cards */
+  @keyframes m1-scale-in {
+    from { opacity: 0; transform: scale(0.94); }
+    to   { opacity: 1; transform: scale(1);    }
+  }
+
+  /* Horizontal shimmer — skeleton / loading state */
+  @keyframes m1-shimmer {
+    from { background-position: -200% center; }
+    to   { background-position:  200% center; }
+  }
+
+  /* Radial pulse — glow beacon effect */
+  @keyframes m1-glow-pulse {
+    0%, 100% { box-shadow: 0 0  8px 2px rgba(139, 92, 246, 0.30); }
+    50%       { box-shadow: 0 0 20px 6px rgba(139, 92, 246, 0.55); }
+  }
+
+  /* Typing-cursor blink */
+  @keyframes m1-caret-blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+  }
+
+  /* Subtle orbit for decorative rings */
+  @keyframes m1-orbit {
+    from { transform: rotate(0deg)   translateX(48px) rotate(0deg);   }
+    to   { transform: rotate(360deg) translateX(48px) rotate(-360deg); }
+  }
+
+  /* Count-up number entrance (paired with CountUp component) */
+  @keyframes m1-count-enter {
+    from { opacity: 0; transform: translateY(6px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0)   scale(1);    }
+  }
+
+  /* Step reveal — used by the replay timeline */
+  @keyframes m1-step-reveal {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0);    }
+  }
+}
+
+@layer utilities {
+  /* ── Animation utility classes ─────────────────────────────────────────── */
+  .animate-fade-up     { animation: m1-fade-up    0.35s ease-out both; }
+  .animate-fade-down   { animation: m1-fade-down  0.35s ease-out both; }
+  .animate-fade-left   { animation: m1-fade-left  0.35s ease-out both; }
+  .animate-fade-right  { animation: m1-fade-right 0.35s ease-out both; }
+  .animate-scale-in    { animation: m1-scale-in   0.30s ease-out both; }
+  .animate-glow-pulse  { animation: m1-glow-pulse 2.5s ease-in-out infinite; }
+  .animate-caret-blink { animation: m1-caret-blink 1s step-end infinite; }
+  .animate-count-enter { animation: m1-count-enter 0.40s ease-out both; }
+  .animate-step-reveal { animation: m1-step-reveal 0.25s ease-out both; }
+
+  /* Shimmer skeleton */
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--elevated) 25%,
+      rgba(255,255,255,0.06) 50%,
+      var(--elevated) 75%
+    );
+    background-size: 200% 100%;
+    animation: m1-shimmer 1.6s ease-in-out infinite;
+  }
+
+  /* ── Delay helpers (0–700 ms in 100 ms steps) ───────────────────────────── */
+  .delay-0   { animation-delay:   0ms; }
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-400 { animation-delay: 400ms; }
+  .delay-500 { animation-delay: 500ms; }
+  .delay-600 { animation-delay: 600ms; }
+  .delay-700 { animation-delay: 700ms; }
+
+  /* ── Speed helpers ───────────────────────────────────────────────────────── */
+  .duration-250 { animation-duration: 250ms; }
+  .duration-350 { animation-duration: 350ms; }
+  .duration-450 { animation-duration: 450ms; }
+  .duration-600 { animation-duration: 600ms; }
+  .duration-800 { animation-duration: 800ms; }
+
+  /* ── GlowCard token ─────────────────────────────────────────────────────── */
+  .glow-card {
+    @apply relative overflow-hidden rounded-xl border border-[#2a2a3a] bg-[#111118];
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+  .glow-card:hover { border-color: rgba(139, 92, 246, 0.30); }
+
+  /* ── Replay timeline tokens ─────────────────────────────────────────────── */
+  .replay-step       { @apply animate-step-reveal; }
+  .replay-step-agent  { @apply text-violet-400;  }
+  .replay-step-tool   { @apply text-blue-400;    }
+  .replay-step-output { @apply text-emerald-400; }
+  .replay-step-error  { @apply text-red-400;     }
+  .replay-step-info   { @apply text-[#8b8baa];   }
+}
+

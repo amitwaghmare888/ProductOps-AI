@@ -4,8 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added: Milestone 1 — Frontend Design System Foundation (2026-07-04)
+
+**Scope: frontend only. Zero backend, API, database, gateway, agent, or business-logic changes.**
+
+#### New files
+- `frontend/components/ui/GlowCard.tsx` — Reusable card primitive with `requestAnimationFrame`-based radial glow tracking the mouse cursor. Supports 5 colour variants (`violet`, `emerald`, `amber`, `red`, `blue`), 3 padding sizes, and an optional `glow` toggle. Zero runtime deps.
+- `frontend/components/ui/CountUp.tsx` — Accessible animated counter. Uses `rAF` + easing functions (`linear`, `easeOut`, `easeInOut`). `IntersectionObserver`-triggered start. Respects `prefers-reduced-motion`. Emits `aria-live="polite"`.
+- `frontend/components/ui/StaggerChildren.tsx` — Sequential entrance animation wrapper. Applies configurable `opacity`/`transform` CSS transitions to each child with a staggered delay. Respects `prefers-reduced-motion`.
+- `frontend/components/ui/index.ts` — Barrel export for all UI primitives.
+- `frontend/components/replay/ReplayProvider.tsx` — React Context + `useReplay` hook. Manages `rAF`-based time-driven playback of a `ReplayStep[]` sequence. Exposes `play`, `pause`, `reset`, `seekTo`, `setSpeed` controls. Supports `0.5×`–`4×` speed. Full TypeScript interface.
+- `frontend/lib/replayData.ts` — 20-step demo replay sequence calibrated to real ADK pipeline timing (~18 s). Includes `DEMO_REPLAY_STEPS`, `DEMO_DURATION_MS`, `DEMO_STEP_COUNT`, and `DEMO_STAGE_BREAKDOWN` helpers.
+- `frontend/hooks/useExecution.ts` — Polling hook for live pipeline tracking. Polls `GET /api/v1/pipeline/{runId}`, infers per-stage status from output key presence, tracks elapsed ms via 100 ms interval, fires `onComplete`/`onError` callbacks. All timers cleaned up on unmount.
+
+#### Modified files
+- `frontend/app/globals.css` — Added 10 `@keyframes` (`m1-fade-up/down/left/right`, `m1-scale-in`, `m1-shimmer`, `m1-glow-pulse`, `m1-caret-blink`, `m1-orbit`, `m1-count-enter`, `m1-step-reveal`) + utility classes, delay helpers (`delay-0` → `delay-700`), duration helpers, `.glow-card` token, and replay timeline colour tokens.
+- `frontend/tailwind.config.js` — Registered all 10 M1 keyframes and named animations in the Tailwind theme. Added `glow` colour map, `glow-*` box-shadow tokens, extra `transitionDuration` steps (`250`, `350`, `450`). Extended `content` array to include `hooks/` and `lib/`.
+
+#### No new npm dependencies installed (zero external animation libraries required).
+
 ### Fixed
 - Fixed an issue where the Google ADK `LlmAgent` reported "No API key was provided." by explicitly exporting `GOOGLE_API_KEY` to `os.environ` in `backend/config.py`.
+
+
 
 ## [0.2.0] — 2026-07-03
 
