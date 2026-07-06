@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ProductOps AI - AI Agents Registry</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed-dim": "#adc6ff",
+                        "tertiary": "#adc6ff",
+                        "outline": "#958ea0",
+                        "surface-container-lowest": "#0a0e17",
+                        "surface": "#0f131d",
+                        "on-surface": "#dfe2f0",
+                        "secondary-container": "#3131c0",
+                        "secondary-fixed": "#e1e0ff",
+                        "on-primary-container": "#340080",
+                        "primary-container": "#a078ff",
+                        "on-secondary-fixed": "#07006c",
+                        "inverse-on-surface": "#2c303b",
+                        "tertiary-container": "#4d8eff",
+                        "on-tertiary": "#002e6a",
+                        "on-surface-variant": "#cbc3d7",
+                        "on-tertiary-fixed": "#001a42",
+                        "background": "#0f131d",
+                        "on-primary-fixed-variant": "#5516be",
+                        "on-error": "#690005",
+                        "surface-container-low": "#171c25",
+                        "surface-bright": "#353944",
+                        "on-secondary": "#1000a9",
+                        "surface-variant": "#31353f",
+                        "surface-tint": "#d0bcff",
+                        "secondary": "#c0c1ff",
+                        "on-primary": "#3c0091",
+                        "primary": "#d0bcff",
+                        "on-secondary-fixed-variant": "#2f2ebe",
+                        "primary-fixed": "#e9ddff",
+                        "surface-container": "#1b2029",
+                        "error-container": "#93000a",
+                        "error": "#ffb4ab",
+                        "primary-fixed-dim": "#d0bcff",
+                        "secondary-fixed-dim": "#c0c1ff",
+                        "tertiary-fixed": "#d8e2ff",
+                        "on-tertiary-container": "#00285d",
+                        "on-error-container": "#ffdad6",
+                        "on-primary-fixed": "#23005c",
+                        "on-background": "#dfe2f0",
+                        "surface-container-high": "#262a34",
+                        "inverse-surface": "#dfe2f0",
+                        "on-tertiary-fixed-variant": "#004395",
+                        "inverse-primary": "#6d3bd7",
+                        "surface-dim": "#0f131d",
+                        "on-secondary-container": "#b0b2ff",
+                        "surface-container-highest": "#31353f",
+                        "outline-variant": "#494454"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "margin-desktop": "32px",
+                        "xs": "4px",
+                        "md": "16px",
+                        "xxl": "48px",
+                        "gutter": "24px",
+                        "lg": "24px",
+                        "margin-mobile": "16px",
+                        "xl": "32px",
+                        "base": "8px"
+                    },
+                    "fontFamily": {
+                        "body-bold": ["Geist Sans"],
+                        "headline-lg-mobile": ["Geist Sans"],
+                        "stat-lg": ["Geist Sans"],
+                        "label-caps": ["JetBrains Mono"],
+                        "body-base": ["Geist Sans"],
+                        "display-lg": ["Geist Sans"],
+                        "headline-md": ["Geist Sans"],
+                        "code-block": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "body-bold": ["14px", { "lineHeight": "20px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.03em", "fontWeight": "700" }],
+                        "stat-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.08em", "fontWeight": "700" }],
+                        "body-base": ["14px", { "lineHeight": "20px", "letterSpacing": "-0.01em", "fontWeight": "400" }],
+                        "display-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "code-block": ["12px", { "lineHeight": "18px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #070B14;
+            color: #dfe2f0;
+            margin: 0;
+            overflow-x: hidden;
+            display: flex;
+        }
+
+        /* Glassmorphism & Tonal Layering */
+        .glass-panel {
+            background: rgba(18, 26, 42, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .glass-panel:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(18, 26, 42, 0.8);
+            box-shadow: 0 0 20px rgba(208, 188, 255, 0.05);
+        }
+
+        /* Ambient Glow */
+        .ambient-glow::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at top left, rgba(208, 188, 255, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Terminal Cursor */
+        .terminal-cursor {
+            display: inline-block;
+            width: 8px;
+            height: 14px;
+            background-color: #dfe2f0;
+            animation: blink 1s step-end infinite;
+            vertical-align: middle;
+            margin-left: 2px;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        /* Gradient Button */
+        .btn-gradient {
+            background: linear-gradient(135deg, #8B5CF6, #6366F1);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            transition: all 0.2s ease;
+        }
+
+        .btn-gradient:hover {
+            transform: scale(1.02);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 15px rgba(208, 188, 255, 0.3);
+        }
+        
+        /* Sparkline (CSS Placeholder for layout) */
+        .sparkline-placeholder {
+            background: linear-gradient(to top, rgba(59, 130, 246, 0.1) 0%, transparent 100%);
+            border-bottom: 1.5px solid #3B82F6;
+            box-shadow: 0 -2px 10px rgba(59, 130, 246, 0.2);
+        }
+    </style>
+</head>
+<body class="font-body-base text-body-base bg-background text-on-background h-screen">
+<!-- JSON Component: SideNavBar -->
+<aside class="bg-surface dark:bg-surface text-primary dark:text-primary font-body-base text-body-base h-screen w-64 flex-shrink-0 border-r border-outline-variant hidden md:flex flex-col overflow-y-auto z-40">
+<div class="p-lg">
+<h1 class="font-headline-md text-headline-md font-bold text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary">hive</span>
+                ProductOps AI
+            </h1>
+<p class="font-label-caps text-label-caps text-on-surface-variant mt-xs tracking-widest uppercase">Autonomous Orchestration</p>
+</div>
+<div class="px-md pb-md">
+<button class="w-full btn-gradient text-white rounded font-body-bold text-body-bold py-2 px-4 flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add</span>
+                New Pipeline
+            </button>
+</div>
+<nav class="flex-1 mt-md">
+<ul class="flex flex-col gap-xs">
+<!-- Inactive -->
+<li><a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors duration-200" href="#"><span class="material-symbols-outlined">terminal</span>Mission Control</a></li>
+<!-- Inactive -->
+<li><a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors duration-200" href="#"><span class="material-symbols-outlined">dashboard</span>Dashboard</a></li>
+<!-- Inactive -->
+<li><a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors duration-200" href="#"><span class="material-symbols-outlined">analytics</span>Pipeline Runs</a></li>
+<!-- Active -->
+<li><a class="flex items-center gap-3 px-4 py-2 text-primary font-body-bold bg-primary-container/10 border-r-2 border-primary hover:bg-surface-variant/50 transition-colors duration-200" href="#"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">smart_toy</span>AI Agents</a></li>
+<!-- Inactive -->
+<li><a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors duration-200" href="#"><span class="material-symbols-outlined">account_tree</span>Architecture</a></li>
+<!-- Inactive -->
+<li><a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors duration-200" href="#"><span class="material-symbols-outlined">description</span>Decision Reports</a></li>
+<!-- Inactive -->
+<li><a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors duration-200" href="#"><span class="material-symbols-outlined">insights</span>Analytics</a></li>
+<!-- Inactive -->
+<li><a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors duration-200" href="#"><span class="material-symbols-outlined">settings</span>Settings</a></li>
+</ul>
+</nav>
+<div class="mt-auto p-md border-t border-outline-variant/30">
+<ul class="flex flex-col gap-xs">
+<li><a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors duration-200" href="#"><span class="material-symbols-outlined">menu_book</span>Docs</a></li>
+<li><a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors duration-200" href="#"><span class="material-symbols-outlined">support_agent</span>Support</a></li>
+</ul>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col h-screen overflow-hidden">
+<!-- JSON Component: TopAppBar -->
+<header class="bg-surface/80 backdrop-blur-md text-primary font-body-base text-body-base border-b border-outline-variant flex justify-between items-center h-16 px-6 w-full sticky top-0 z-50">
+<!-- Mobile Brand/Menu Trigger (hidden on md) -->
+<div class="md:hidden flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary">menu</span>
+<span class="font-headline-md text-headline-md font-bold text-on-surface">ProductOps AI</span>
+</div>
+<!-- Search -->
+<div class="hidden md:flex flex-1 items-center max-w-md relative">
+<span class="material-symbols-outlined absolute left-3 text-on-surface-variant pointer-events-none">search</span>
+<input class="w-full bg-surface-container border border-outline-variant/50 rounded-full py-1.5 pl-10 pr-16 text-on-surface font-body-base text-body-base focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-colors bg-opacity-50" placeholder="Search agents, pipelines, logs..." type="text"/>
+<div class="absolute right-3 px-1.5 py-0.5 rounded border border-outline-variant/50 bg-surface text-on-surface-variant font-label-caps text-label-caps pointer-events-none flex items-center">
+                    ⌘K
+                </div>
+</div>
+<!-- Actions -->
+<div class="flex items-center gap-md ml-auto">
+<button class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all p-1.5 rounded-full"><span class="material-symbols-outlined">notifications</span></button>
+<button class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all p-1.5 rounded-full"><span class="material-symbols-outlined">grid_view</span></button>
+<div class="h-6 w-px bg-outline-variant mx-1"></div>
+<button class="hidden md:block btn-gradient text-white px-4 py-1.5 rounded font-body-bold text-body-bold">
+                    Deploy
+                </button>
+<img alt="User Profile" class="w-8 h-8 rounded-full border border-outline-variant/50 object-cover cursor-pointer hover:border-primary/50 transition-colors" data-alt="A small circular avatar placeholder showing a high-contrast minimalist geometric logo in deep obsidian and bright violet, representing a highly technical user profile in a sleek cybernetic interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBk_wZud79Thc9bsdqEbEkluut3qx_U81RubABli10XYAveIV3oWpX6-beRJ4tDnGlI6rDTahxbA1zuqCcR9EsL4sh4uyDiyMDtW_b6aUO8bRSZ6NnY5dVnUy7_4Sf4v5_zinMcRHOsdN73Eu75zq8O9ECktFVu2LixvbIWcSHC_PMYNbkpCxgxljLTpcTngfPFMFZ85lucBR01QqHg_2snCjeb6TMupEXxVAVRJjtF9k22cAm4SsCZ"/>
+</div>
+</header>
+<!-- Canvas -->
+<div class="flex-1 overflow-y-auto p-margin-mobile md:p-margin-desktop w-full max-w-[1440px] mx-auto">
+<!-- Page Header -->
+<div class="mb-xl flex flex-col md:flex-row md:items-end justify-between gap-md">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-surface">Agent Registry</h2>
+<p class="text-on-surface-variant mt-sm max-w-2xl">Monitor and orchestrate autonomous specialists across the product lifecycle. Real-time telemetry and execution confidence metrics.</p>
+</div>
+<div class="flex gap-sm">
+<button class="flex items-center gap-xs px-3 py-1.5 rounded border border-outline-variant/50 text-on-surface-variant hover:text-on-surface hover:border-outline-variant bg-surface/30 transition-colors font-body-bold text-body-bold">
+<span class="material-symbols-outlined text-sm">filter_list</span> Filter
+                    </button>
+<button class="flex items-center gap-xs px-3 py-1.5 rounded border border-outline-variant/50 text-on-surface-variant hover:text-on-surface hover:border-outline-variant bg-surface/30 transition-colors font-body-bold text-body-bold">
+<span class="material-symbols-outlined text-sm">sort</span> Sort
+                    </button>
+</div>
+</div>
+<!-- Bento Grid / Agent Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-gutter">
+<!-- Agent Card 1: Feedback -->
+<div class="glass-panel rounded-lg p-lg relative overflow-hidden ambient-glow group flex flex-col col-span-1 md:col-span-2 lg:col-span-1">
+<div class="flex justify-between items-start mb-md z-10 relative">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded bg-primary-container/10 border border-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">forum</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface leading-tight">Insight-X</h3>
+<p class="font-label-caps text-label-caps text-tertiary uppercase tracking-wider">Feedback Agent</p>
+</div>
+</div>
+<div class="flex items-center gap-xs text-secondary-fixed">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary-fixed opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-secondary-fixed"></span>
+</span>
+<span class="font-label-caps text-label-caps">Active</span>
+</div>
+</div>
+<div class="z-10 relative mb-md flex-1">
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded p-sm font-code-block text-code-block text-on-surface-variant h-20 overflow-hidden relative">
+<span class="text-tertiary">Sys&gt;</span> Synthesizing 4,203 Intercom tickets.<br/>
+<span class="text-primary">Agt&gt;</span> Cluster found: "API Rate Limits" (Conf: 0.92) <span class="terminal-cursor"></span>
+<div class="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-surface-container-lowest to-transparent"></div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-sm z-10 relative mb-md border-t border-b border-outline-variant/20 py-sm">
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Latency</p>
+<p class="font-stat-lg text-stat-lg text-on-surface">142<span class="text-sm text-on-surface-variant">ms</span></p>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Tokens / H</p>
+<p class="font-stat-lg text-stat-lg text-on-surface">45<span class="text-sm text-on-surface-variant">K</span></p>
+</div>
+</div>
+<div class="z-10 relative flex justify-between items-end mt-auto h-8">
+<div class="flex flex-col justify-end">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Conf: <span class="text-tertiary">0.94</span></span>
+</div>
+<div class="w-24 h-6 sparkline-placeholder rounded-t-sm"></div>
+</div>
+</div>
+<!-- Agent Card 2: Business -->
+<div class="glass-panel rounded-lg p-lg relative overflow-hidden ambient-glow group flex flex-col">
+<div class="flex justify-between items-start mb-md z-10 relative">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded bg-tertiary-container/10 border border-tertiary-container/20 flex items-center justify-center text-tertiary-container">
+<span class="material-symbols-outlined">trending_up</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface leading-tight">Strat-AI</h3>
+<p class="font-label-caps text-label-caps text-tertiary-container uppercase tracking-wider">Business Agent</p>
+</div>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="relative inline-flex rounded-full h-2 w-2 bg-on-surface-variant"></span>
+<span class="font-label-caps text-label-caps">Idle</span>
+</div>
+</div>
+<div class="z-10 relative mb-md flex-1 flex items-center justify-center bg-surface-container-lowest/50 border border-outline-variant/20 rounded p-sm border-dashed">
+<span class="font-label-caps text-label-caps text-on-surface-variant opacity-50">Awaiting Trigger</span>
+</div>
+<div class="grid grid-cols-2 gap-sm z-10 relative mb-md border-t border-b border-outline-variant/20 py-sm">
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Latency</p>
+<p class="font-stat-lg text-stat-lg text-on-surface">--</p>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Tokens / H</p>
+<p class="font-stat-lg text-stat-lg text-on-surface">0</p>
+</div>
+</div>
+<div class="z-10 relative flex justify-between items-end mt-auto h-8">
+<div class="flex flex-col justify-end">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Conf: <span class="text-on-surface-variant">N/A</span></span>
+</div>
+<div class="w-24 h-6 border-b border-outline-variant/20"></div>
+</div>
+</div>
+<!-- Agent Card 3: Planning -->
+<div class="glass-panel rounded-lg p-lg relative overflow-hidden ambient-glow group flex flex-col">
+<div class="flex justify-between items-start mb-md z-10 relative">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded bg-secondary/10 border border-secondary/20 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">timeline</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface leading-tight">Sprint-O</h3>
+<p class="font-label-caps text-label-caps text-secondary uppercase tracking-wider">Planning Agent</p>
+</div>
+</div>
+<div class="flex items-center gap-xs text-secondary-fixed">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary-fixed opacity-75" style="animation-duration: 2s;"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-secondary-fixed"></span>
+</span>
+<span class="font-label-caps text-label-caps">Processing</span>
+</div>
+</div>
+<div class="z-10 relative mb-md flex-1">
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded p-sm font-code-block text-code-block text-on-surface-variant h-20 overflow-hidden relative">
+<span class="text-tertiary">Sys&gt;</span> Aligning Q3 Roadmap items.<br/>
+<span class="text-secondary">Agt&gt;</span> Resource bottleneck detected in Eng-Team-A...
+                            <div class="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-surface-container-lowest to-transparent"></div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-sm z-10 relative mb-md border-t border-b border-outline-variant/20 py-sm">
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Latency</p>
+<p class="font-stat-lg text-stat-lg text-on-surface">310<span class="text-sm text-on-surface-variant">ms</span></p>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Tokens / H</p>
+<p class="font-stat-lg text-stat-lg text-on-surface">12<span class="text-sm text-on-surface-variant">K</span></p>
+</div>
+</div>
+<div class="z-10 relative flex justify-between items-end mt-auto h-8">
+<div class="flex flex-col justify-end">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Conf: <span class="text-secondary">0.78</span></span>
+</div>
+<div class="w-24 h-6 sparkline-placeholder rounded-t-sm" style="background: linear-gradient(to top, rgba(192, 193, 255, 0.1) 0%, transparent 100%); border-bottom-color: #c0c1ff; box-shadow: 0 -2px 10px rgba(192, 193, 255, 0.2);"></div>
+</div>
+</div>
+<!-- Agent Card 4: Jira -->
+<div class="glass-panel rounded-lg p-lg relative overflow-hidden ambient-glow group flex flex-col">
+<div class="flex justify-between items-start mb-md z-10 relative">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded bg-inverse-primary/10 border border-inverse-primary/20 flex items-center justify-center text-inverse-primary">
+<span class="material-symbols-outlined">bug_report</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface leading-tight">Triage-Bot</h3>
+<p class="font-label-caps text-label-caps text-inverse-primary uppercase tracking-wider">Jira Agent</p>
+</div>
+</div>
+<div class="flex items-center gap-xs text-error">
+<span class="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
+<span class="font-label-caps text-label-caps">Degraded</span>
+</div>
+</div>
+<div class="z-10 relative mb-md flex-1">
+<div class="bg-surface-container-lowest border border-error/30 rounded p-sm font-code-block text-code-block text-on-surface-variant h-20 overflow-hidden relative">
+<span class="text-error">Err&gt;</span> API Rate limit exceeded.<br/>
+<span class="text-on-surface-variant">Sys&gt;</span> Retrying in 30s... <span class="terminal-cursor"></span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-sm z-10 relative mb-md border-t border-b border-outline-variant/20 py-sm">
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Latency</p>
+<p class="font-stat-lg text-stat-lg text-error">980<span class="text-sm text-on-surface-variant">ms</span></p>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Tokens / H</p>
+<p class="font-stat-lg text-stat-lg text-on-surface">112<span class="text-sm text-on-surface-variant">K</span></p>
+</div>
+</div>
+<div class="z-10 relative flex justify-between items-end mt-auto h-8">
+<div class="flex flex-col justify-end">
+<span class="font-label-caps text-label-caps text-on-surface-variant">Conf: <span class="text-error">0.42</span></span>
+</div>
+<div class="w-24 h-6 sparkline-placeholder rounded-t-sm" style="background: linear-gradient(to top, rgba(255, 180, 171, 0.1) 0%, transparent 100%); border-bottom-color: #ffb4ab; box-shadow: 0 -2px 10px rgba(255, 180, 171, 0.2);"></div>
+</div>
+</div>
+<!-- Wide Terminal View (Bento 2-col) -->
+<div class="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-4 glass-panel rounded-lg p-0 relative overflow-hidden flex flex-col mt-md">
+<div class="bg-surface-container-low border-b border-outline-variant/30 px-lg py-sm flex justify-between items-center z-10">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider flex items-center gap-xs">
+<span class="material-symbols-outlined text-sm">terminal</span> Global Agent Telemetry Stream
+                         </h3>
+<div class="flex gap-2">
+<div class="w-2.5 h-2.5 rounded-full bg-outline-variant/50"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-outline-variant/50"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-outline-variant/50"></div>
+</div>
+</div>
+<div class="p-lg bg-[#070B14] font-code-block text-code-block text-on-surface-variant h-64 overflow-y-auto font-mono flex flex-col gap-1 z-10 relative">
+<div><span class="text-on-surface opacity-50">[10:42:01]</span> <span class="text-on-surface">System:</span> Initializing orchestrator node... <span class="text-secondary-fixed">[OK]</span></div>
+<div><span class="text-on-surface opacity-50">[10:42:05]</span> <span class="text-primary">Insight-X:</span> Polling Intercom API... fetched 120 new conversations.</div>
+<div><span class="text-on-surface opacity-50">[10:42:06]</span> <span class="text-tertiary">Network:</span> Route tables updated for cross-agent communication.</div>
+<div><span class="text-on-surface opacity-50">[10:42:12]</span> <span class="text-primary">Insight-X:</span> Processing batch #4402... <span class="text-on-surface opacity-50">Mem: 142MB | Lat: 104ms</span></div>
+<div><span class="text-on-surface opacity-50">[10:42:15]</span> <span class="text-secondary">Sprint-O:</span> Receiving dependency graph update from Jira.</div>
+<div><span class="text-on-surface opacity-50">[10:42:18]</span> <span class="text-error">Triage-Bot:</span> WARN: API Rate limit approaching (95%). Commencing backoff strategy.</div>
+<div><span class="text-on-surface opacity-50">[10:42:22]</span> <span class="text-primary">Insight-X:</span> Batch complete. Confidence threshold met (0.94). Output passed to vector store.</div>
+<div><span class="text-on-surface opacity-50">[10:42:24]</span> <span class="text-on-surface">System:</span> Waiting for next event... <span class="terminal-cursor"></span></div>
+</div>
+</div>
+</div>
+<div class="h-xl"></div> <!-- Bottom padding -->
+</div>
+</main>
+</body></html>

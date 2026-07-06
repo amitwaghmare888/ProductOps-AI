@@ -59,6 +59,48 @@ async def health_check():
     )
 
 
+@router.post("/pipeline/test")
+async def test_pipeline_quick():
+    """Quick test endpoint - returns mock data immediately."""
+    return {
+        "run_id": "test_" + str(uuid.uuid4())[:8],
+        "status": "completed",
+        "analysis": {
+            "feedback_id": "fb_test001",
+            "raw_text": "Test feedback",
+            "category": "bug",
+            "category_confidence": 0.9,
+            "sentiment": "negative",
+            "sentiment_score": 0.3,
+            "entities": ["app", "crash"],
+            "platforms": ["mobile"],
+            "severity": "high",
+            "summary": "Test analysis completed"
+        },
+        "prioritization": {
+            "prioritized_items": [{
+                "feedback_id": "fb_test001",
+                "rice_score": 85.0,
+                "rationale": "High impact user issue"
+            }]
+        },
+        "planning": {
+            "tasks": [{
+                "task_id": "task_test001",
+                "feedback_id": "fb_test001",
+                "title": "Fix crash issue",
+                "description": "Investigate and fix crash",
+                "technical_approach": "Debug and patch",
+                "effort_estimate": "3 days",
+                "priority": "high",
+                "acceptance_criteria": ["No crashes", "Tests pass"]
+            }]
+        },
+        "duration_ms": 100,
+        "message": "Mock test successful"
+    }
+
+
 # ─── Pipeline ────────────────────────────────────────────────────────────────
 
 @router.post("/pipeline", response_model=PipelineRunResponse, status_code=202)
@@ -67,6 +109,10 @@ async def start_pipeline(
     db: AsyncSession = Depends(get_db),
 ):
     """Start a new pipeline run. Returns immediately; poll GET /pipeline/{id} for results."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Pipeline request received: {request.feedback_text[:100]}")
+    
     run_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
 
@@ -79,9 +125,14 @@ async def start_pipeline(
     )
     db.add(db_run)
     await db.commit()
+    
+    logger.info(f"Pipeline {run_id} saved to DB, starting background task")
 
-    # Fire and forget — run pipeline in background
-    asyncio.create_task(_run_pipeline_bg(run_id, request.feedback_text))
+    # Create background task with explicit exception handling
+    task = asyncio.create_task(_run_pipeline_bg_wrapper(run_id, request.feedback_text))
+    # Don't await - let it run in background
+    
+    logger.info(f"Pipeline {run_id} background task created: {task}")
 
     return PipelineRunResponse(
         run_id=run_id,
@@ -91,18 +142,46 @@ async def start_pipeline(
     )
 
 
+async def _run_pipeline_bg_wrapper(run_id: str, feedback_text: str):
+    """Wrapper to catch and log all exceptions from background task."""
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        logger.info(f"!!! Background wrapper started for {run_id}")
+        await _run_pipeline_bg(run_id, feedback_text)
+    except Exception as e:
+        logger.error(f"!!! Background task crashed: {e}", exc_info=True)
+        # Update DB with error
+        from backend.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            stmt = (
+                PipelineRun.__table__.update()
+                .where(PipelineRun.id == run_id)
+                .values(status="failed", error_message=f"Background task failed: {str(e)}")
+            )
+            await db.execute(stmt)
+            await db.commit()
+
+
+
 async def _run_pipeline_bg(run_id: str, feedback_text: str):
     """Background task: execute pipeline and persist results."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Background task started for {run_id}")
+    
     from backend.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         try:
+            logger.info(f"Calling run_pipeline for {run_id}")
             result = await run_pipeline(feedback_text, run_id=run_id)
+            logger.info(f"Pipeline {run_id} completed with status: {result.get('status')}")
 
             # Save to long-term memory
             try:
                 await memory_service.store_pipeline_result(run_id, result)
-            except Exception:
-                pass  # Memory storage is best-effort
+            except Exception as e:
+                logger.warning(f"Memory storage failed: {e}")
 
             # Update DB
             stmt = (
@@ -119,14 +198,16 @@ async def _run_pipeline_bg(run_id: str, feedback_text: str):
             )
             await db.execute(stmt)
             await db.commit()
+            logger.info(f"Pipeline {run_id} results saved to DB")
 
             # Persist structured outputs to relational tables (best-effort)
             try:
                 await _persist_structured_outputs(db, run_id, result)
-            except Exception:
-                pass  # Non-fatal: pipeline_runs record is already saved
+            except Exception as e:
+                logger.warning(f"Structured output persistence failed: {e}")
 
         except Exception as e:
+            logger.error(f"Pipeline {run_id} failed: {e}")
             stmt = (
                 PipelineRun.__table__.update()
                 .where(PipelineRun.id == run_id)

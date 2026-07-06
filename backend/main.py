@@ -4,6 +4,7 @@ FastAPI application entry point.
 Start with:  uvicorn backend.main:app --reload --port 8000
 API docs at: http://localhost:8000/docs
 """
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.config import get_settings
 from backend.database import init_db
 from backend.api.routes import router
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 settings = get_settings()
 
@@ -28,7 +35,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="ProductOps AI",
     description=(
-        "AI-powered product operations pipeline using Google ADK. "
+        "AI-powered product operations pipeline using OpenAI. "
         "Analyzes customer feedback → Prioritizes by business impact → "
         "Generates engineering plans."
     ),

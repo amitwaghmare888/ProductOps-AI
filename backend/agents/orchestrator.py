@@ -1,10 +1,8 @@
 """
-ProductOps Orchestrator — ADK SequentialAgent that runs the full pipeline.
+ProductOps Orchestrator — Orchestrates the full pipeline without ADK.
 
+Migrated from Google ADK to direct OpenAI integration.
 Pipeline: Feedback Analyzer → Business Prioritizer → Engineering Planner
-
-Each sub-agent reads/writes session state via output_key/input_key.
-The orchestrator manages the session lifecycle and returns structured results.
 """
 import json
 import logging
@@ -12,14 +10,9 @@ import time
 import uuid
 from typing import Any
 
-from google.adk.agents import SequentialAgent
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.genai import types
-
-from backend.agents.feedback_analyzer import feedback_analyzer_agent
-from backend.agents.business_prioritizer import business_prioritizer_agent
-from backend.agents.engineering_planner import engineering_planner_agent
+from backend.agents.feedback_analyzer import analyze_feedback
+from backend.agents.business_prioritizer import prioritize_feedback
+from backend.agents.engineering_planner import plan_engineering
 from backend.utils.retry import async_retry
 from backend.utils.output_schemas import (
     AnalysisOutput,
@@ -27,90 +20,33 @@ from backend.utils.output_schemas import (
     PlanningOutput,
 )
 
-
-# The core pipeline: 3 agents in sequence
-productops_pipeline = SequentialAgent(
-    name="productops_orchestrator",
-    description=(
-        "Orchestrates the ProductOps pipeline: "
-        "Analyze feedback → Prioritize → Generate engineering plan"
-    ),
-    sub_agents=[
-        feedback_analyzer_agent,
-        business_prioritizer_agent,
-        engineering_planner_agent,
-    ],
-)
-
-# Session service (in-memory for MVP)
-session_service = InMemorySessionService()
-
-APP_NAME = "productops_ai"
 logger = logging.getLogger(__name__)
 
 
 @async_retry(max_attempts=3, base_delay=2.0, max_delay=30.0)
-async def _execute_adk_pipeline(
-    feedback_text: str,
-    user_id: str,
-) -> tuple[str, dict]:
+async def _execute_pipeline(feedback_text: str) -> tuple[dict, dict, dict]:
     """
-    Execute the ADK SequentialAgent pipeline with exponential backoff retry.
-
-    Creates a fresh session per call so each retry attempt starts with clean
-    state — prevents stale partial agent outputs from polluting a retry.
-
+    Execute the ProductOps pipeline with exponential backoff retry.
+    
     Args:
         feedback_text: Raw customer feedback to process.
-        user_id: Stable user identifier for the parent run.
-
+        
     Returns:
-        Tuple of (final_response_text, session_state_dict).
+        Tuple of (analysis, prioritization, planning) dicts.
     """
-    # Fresh session ID per attempt — isolates state between retries
-    session_id = str(uuid.uuid4())
-
-    await session_service.create_session(
-        app_name=APP_NAME,
-        user_id=user_id,
-        session_id=session_id,
-    )
-
-    runner = Runner(
-        agent=productops_pipeline,
-        app_name=APP_NAME,
-        session_service=session_service,
-    )
-
-    message = types.Content(
-        role="user",
-        parts=[
-            types.Part(
-                text=(
-                    f"Analyze this customer feedback and produce a full "
-                    f"product operations plan:\n\n{feedback_text}"
-                )
-            ),
-        ],
-    )
-
-    final_text = ""
-    async for event in runner.run_async(
-        user_id=user_id,
-        session_id=session_id,
-        new_message=message,
-    ):
-        if event.is_final_response():
-            if event.content and event.content.parts:
-                final_text = event.content.parts[0].text or ""
-
-    final_session = await session_service.get_session(
-        app_name=APP_NAME,
-        user_id=user_id,
-        session_id=session_id,
-    )
-    state = final_session.state if final_session else {}
-    return final_text, state
+    # Stage 1: Analysis
+    logger.info("Starting Stage 1: Feedback Analysis")
+    analysis = await analyze_feedback(feedback_text)
+    
+    # Stage 2: Prioritization
+    logger.info("Starting Stage 2: Business Prioritization")
+    prioritization = await prioritize_feedback(analysis)
+    
+    # Stage 3: Engineering Planning
+    logger.info("Starting Stage 3: Engineering Planning")
+    planning = await plan_engineering(analysis, prioritization)
+    
+    return analysis, prioritization, planning
 
 
 async def run_pipeline(
@@ -119,37 +55,67 @@ async def run_pipeline(
 ) -> dict[str, Any]:
     """
     Run the full ProductOps pipeline on customer feedback.
-
-    Delegates ADK execution to _execute_adk_pipeline which includes
+    
+    Delegates execution to _execute_pipeline which includes
     exponential backoff retry (3 attempts, 2-30s delay).
-
+    
     Args:
         feedback_text: Raw customer feedback. Multiple items separated by newlines.
         run_id: Optional pipeline run ID. Auto-generated if not provided.
-
+        
     Returns:
         dict with run_id, status, analysis, prioritization, planning, and duration_ms.
     """
     run_id = run_id or str(uuid.uuid4())
-    user_id = f"user_{run_id[:8]}"
-
+    
     # Timing spans the full execution including any retry delays
     start = time.time()
-
-    # Execute with retry — each attempt creates a fresh internal session
-    final_text, state = await _execute_adk_pipeline(feedback_text, user_id)
-
+    
+    try:
+        # Execute with retry
+        analysis, prioritization, planning = await _execute_pipeline(feedback_text)
+    except Exception as exc:
+        duration_ms = int((time.time() - start) * 1000)
+        error_msg = str(exc)
+        
+        # User-friendly error messages for common issues
+        if "rate_limit" in error_msg.lower() or "429" in error_msg:
+            error_msg = (
+                "API rate limit reached. Please wait a few moments and try again. "
+                "For higher limits, consider upgrading your OpenAI plan."
+            )
+        elif "quota" in error_msg.lower():
+            error_msg = (
+                "API quota exceeded. Please check your OpenAI account usage and billing. "
+                "Visit: https://platform.openai.com/usage"
+            )
+        elif "timeout" in error_msg.lower():
+            error_msg = (
+                "Request timed out. The AI model took too long to respond. "
+                "Please try again with shorter feedback or check your connection."
+            )
+        
+        logger.error(f"Pipeline {run_id} failed: {exc}")
+        
+        return {
+            "run_id": run_id,
+            "session_id": run_id,
+            "status": "failed",
+            "error_message": error_msg,
+            "analysis": None,
+            "prioritization": None,
+            "planning": None,
+            "duration_ms": duration_ms,
+            "final_response": None,
+        }
+    
     duration_ms = int((time.time() - start) * 1000)
-
-    analysis = _parse_state(state.get("analysis_result"))
-    prioritization = _parse_state(state.get("prioritization_result"))
-    planning = _parse_state(state.get("planning_result"))
-
+    
     # Non-blocking schema validation — logs warnings on drift, never raises
     _validate_output("analysis", analysis, AnalysisOutput)
     _validate_output("prioritization", prioritization, PrioritizationOutput)
     _validate_output("planning", planning, PlanningOutput)
-
+    
     return {
         "run_id": run_id,
         "session_id": run_id,
@@ -158,57 +124,25 @@ async def run_pipeline(
         "prioritization": prioritization,
         "planning": planning,
         "duration_ms": duration_ms,
-        "final_response": final_text[:500] if final_text else None,
+        "final_response": f"Pipeline completed successfully in {duration_ms}ms",
     }
-
-
-def _parse_state(value: Any) -> dict | list | str:
-    """
-    Parse a session state value into structured data.
-
-    With response_mime_type="application/json" set on all LlmAgents, values
-    arrive as raw JSON strings — no markdown fences. The fence-stripping block
-    below is a safety fallback only and logs a warning if triggered.
-    """
-    if value is None:
-        return {}
-    if isinstance(value, (dict, list)):
-        return value
-
-    if isinstance(value, str):
-        cleaned = value.strip()
-        # Safety fallback — should not trigger with JSON mode active on all agents
-        if cleaned.startswith("```"):
-            lines = cleaned.split("\n")
-            cleaned = "\n".join(lines[1:-1] if len(lines) >= 3 else lines[1:]).strip()
-            logger.warning(
-                "_parse_state: markdown fence detected despite JSON mode — "
-                "verify generate_content_config on all LlmAgent definitions."
-            )
-        try:
-            return json.loads(cleaned)
-        except json.JSONDecodeError:
-            return {"raw_output": value}
-
-    return {"raw_output": str(value)}
 
 
 def _validate_output(stage: str, output: dict | list | str, schema: type) -> None:
     """
     Validate an agent output dict against its expected Pydantic schema.
-
+    
     Non-blocking: logs warnings on schema drift but never raises.
     This provides output quality observability without breaking demo stability.
-
+    
     Args:
         stage: Agent stage name used in log messages (e.g. 'analysis').
-        output: Parsed agent output from _parse_state().
+        output: Parsed agent output.
         schema: Pydantic model class to validate against.
     """
-    if not isinstance(output, dict) or "raw_output" in output:
+    if not isinstance(output, dict) or "error" in output:
         logger.warning(
-            "Agent stage '%s' produced unstructured output "
-            "(JSON parse failed or LLM drift). Snippet: %s",
+            "Agent stage '%s' produced output with errors. Snippet: %s",
             stage,
             str(output)[:200],
         )

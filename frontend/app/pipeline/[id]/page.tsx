@@ -1,145 +1,137 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
+import { usePolling } from '@/hooks';
+import { getPipelineRun } from '@/lib/api';
+import type { PipelineResult } from '@/types/pipeline';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { BentoCard } from '@/components/ui/BentoCard';
+import { AgentCard } from '@/components/ui/AgentCard';
+import { StatusBadge, getStatusVariant } from '@/components/ui/StatusBadge';
+import { getSeverityVariant, getPriorityVariant } from '@/components/ui/Badge';
+import { TerminalBlock } from '@/components/ui/TerminalBlock';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface PipelineResult {
-  run_id: string;
-  status: string;
-  created_at: string;
-  input_source: string;
-  analysis: Record<string, unknown> | null;
-  prioritization: Record<string, unknown> | null;
-  planning: Record<string, unknown> | null;
-  duration_ms: number | null;
-  error_message: string | null;
-}
-
-// ─── Small reusable components ────────────────────────────────────────────────
 function Pill({ label, value, color = 'default' }: { label: string; value: string | number | undefined; color?: string }) {
   const colorMap: Record<string, string> = {
-    default: 'text-[#f0f0f8]',
-    violet: 'text-violet-400',
+    default: 'text-on-surface',
+    violet: 'text-primary',
     emerald: 'text-emerald-400',
     amber: 'text-amber-400',
-    red: 'text-red-400',
+    red: 'text-error',
   };
   return (
     <div className="flex flex-col gap-0.5">
-      <p className="label">{label}</p>
-      <p className={`text-sm font-medium ${colorMap[color] || colorMap.default}`}>{value ?? '—'}</p>
+      <p className="font-label-caps text-label-caps text-on-surface-variant">{label}</p>
+      <p className={`font-body-bold text-body-bold ${colorMap[color] || colorMap.default}`}>{value ?? '—'}</p>
     </div>
   );
 }
 
-function SeverityBadge({ value }: { value?: string }) {
-  if (!value) return null;
-  const v = value.toLowerCase();
-  if (v === 'critical') return <span className="badge-critical">{value}</span>;
-  if (v === 'high')     return <span className="badge-high">{value}</span>;
-  if (v === 'medium')   return <span className="badge-medium">{value}</span>;
-  return <span className="badge-low">{value}</span>;
+function SeverityBadge2({ value }: { value?: string }) {
+  const variant = getSeverityVariant(value);
+  if (!variant || !value) return null;
+  return <span className={`badge badge-${variant}`}>{value}</span>;
 }
 
-function PriorityBadge({ value }: { value?: string }) {
-  if (!value) return null;
-  if (value === 'P0') return <span className="badge-critical">{value}</span>;
-  if (value === 'P1') return <span className="badge-high">{value}</span>;
-  if (value === 'P2') return <span className="badge-medium">{value}</span>;
-  return <span className="badge-low">{value}</span>;
+function PriorityBadge2({ value }: { value?: string }) {
+  const variant = getPriorityVariant(value);
+  if (!variant || !value) return null;
+  return <span className={`badge badge-${variant}`}>{value}</span>;
 }
 
 function JsonViewer({ data }: { data: unknown }) {
   return (
-    <pre className="bg-[#09090f] rounded-lg p-4 text-xs text-emerald-400 font-mono overflow-auto max-h-80 border border-[#2a2a3a] leading-relaxed">
-      {JSON.stringify(data, null, 2)}
-    </pre>
+    <TerminalBlock>
+      <pre className="text-emerald-400 leading-relaxed">
+        {JSON.stringify(data, null, 2)}
+      </pre>
+    </TerminalBlock>
   );
 }
 
 function LoadingSpinner() {
   return (
-    <div className="flex items-center gap-2 text-[#8b8baa] text-sm">
-      <div className="w-4 h-4 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin-slow" />
+    <div className="flex items-center gap-2 text-on-surface-variant text-body-base">
+      <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin-slow" />
       Loading pipeline run…
     </div>
   );
 }
 
-// ─── Tab panels ───────────────────────────────────────────────────────────────
 function AnalysisPanel({ analysis }: { analysis: Record<string, unknown> }) {
   const entities = (analysis.entities as string[]) || [];
   const platforms = (analysis.platforms as string[]) || [];
 
   return (
-    <div className="space-y-4 animate-fade-in">
-      {/* Summary card */}
-      <div className="card space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <p className="label mb-1">Summary</p>
-            <p className="text-sm text-[#f0f0f8] leading-relaxed">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-4"
+    >
+      <AgentCard
+        name="Feedback Analyzer"
+        type="alpha"
+        icon="psychology"
+        status="idle"
+      >
+        <div className="space-y-4">
+          <div>
+            <p className="font-label-caps text-label-caps text-on-surface-variant mb-2">
+              SUMMARY
+            </p>
+            <p className="text-body-base text-on-surface leading-relaxed">
               {(analysis.summary as string) || '—'}
             </p>
           </div>
-          <SeverityBadge value={analysis.severity as string} />
-        </div>
 
-        <div className="divider pt-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Pill label="Category" value={(analysis.category as string)?.replace('_', ' ')} />
-          <Pill label="Sentiment" value={analysis.sentiment as string} />
-          <Pill label="Sentiment Score" value={typeof analysis.sentiment_score === 'number' ? (analysis.sentiment_score as number).toFixed(2) : '—'} color="violet" />
-          <Pill label="Confidence" value={typeof analysis.category_confidence === 'number' ? (analysis.category_confidence as number).toFixed(2) : '—'} color="violet" />
-        </div>
-      </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <Pill label="CATEGORY" value={(analysis.category as string)?.replace('_', ' ')} />
+            <Pill label="SENTIMENT" value={analysis.sentiment as string} />
+            <Pill label="SCORE" value={typeof analysis.sentiment_score === 'number' ? (analysis.sentiment_score as number).toFixed(2) : '—'} color="violet" />
+            <Pill label="SEVERITY" value={analysis.severity as string} color="amber" />
+          </div>
 
-      {/* Entities */}
-      {(entities.length > 0 || platforms.length > 0) && (
-        <div className="card space-y-3">
-          <p className="text-sm font-medium text-[#f0f0f8]">Extracted Entities</p>
-          {entities.length > 0 && (
-            <div>
-              <p className="label mb-1.5">Product Entities</p>
-              <div className="flex flex-wrap gap-1.5">
-                {entities.map((e, i) => (
-                  <span key={i} className="badge-medium">{e}</span>
-                ))}
-              </div>
+          {(entities.length > 0 || platforms.length > 0) && (
+            <div className="space-y-3">
+              {entities.length > 0 && (
+                <div>
+                  <p className="font-label-caps text-label-caps text-on-surface-variant mb-2">
+                    ENTITIES
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {entities.map((e, i) => (
+                      <span key={i} className="badge-secondary text-xs">{e}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {platforms.length > 0 && (
+                <div>
+                  <p className="font-label-caps text-label-caps text-on-surface-variant mb-2">
+                    PLATFORMS
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {platforms.map((p, i) => (
+                      <span key={i} className="badge-primary text-xs">{p}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
-          {platforms.length > 0 && (
-            <div>
-              <p className="label mb-1.5">Platforms</p>
-              <div className="flex flex-wrap gap-1.5">
-                {platforms.map((p, i) => (
-                  <span key={i} className="badge-violet">{p}</span>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
-      )}
+      </AgentCard>
 
-      {/* Needs review warning */}
-      {analysis.needs_review && (
-        <div className="card-sm border-amber-500/20 bg-amber-500/5 flex items-center gap-2">
-          <svg className="w-4 h-4 text-amber-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-          </svg>
-          <p className="text-xs text-amber-400">Low confidence — manual review recommended</p>
-        </div>
-      )}
-
-      <details className="card-sm">
-        <summary className="text-xs text-[#4a4a6a] cursor-pointer hover:text-[#8b8baa] transition-colors">
-          Raw JSON output
+      <details className="bento-card">
+        <summary className="font-label-caps text-label-caps text-on-surface-variant cursor-pointer hover:text-on-surface transition-colors">
+          RAW JSON OUTPUT
         </summary>
-        <div className="mt-3"><JsonViewer data={analysis} /></div>
+        <div className="mt-4"><JsonViewer data={analysis} /></div>
       </details>
-    </div>
+    </motion.div>
   );
 }
 
@@ -147,65 +139,61 @@ function PrioritizationPanel({ prioritization }: { prioritization: Record<string
   const items = (prioritization.prioritized_items as Record<string, unknown>[]) || [];
 
   return (
-    <div className="space-y-4 animate-fade-in">
-      {items.map((item, idx) => (
-        <div key={idx} className="card space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <SeverityBadge value={item.urgency as string} />
-                <p className="mono text-[#4a4a6a]">{item.feedback_id as string}</p>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-4"
+    >
+      <AgentCard
+        name="Business Prioritizer"
+        type="network"
+        icon="analytics"
+        status="idle"
+      >
+        <div className="space-y-4">
+          {items.map((item, idx) => (
+            <div key={idx} className="space-y-3 pb-4 border-b border-outline-variant/30 last:border-0 last:pb-0">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <SeverityBadge2 value={item.urgency as string} />
+                    <p className="font-code-block text-code-block font-mono text-on-surface-variant">
+                      {item.feedback_id as string}
+                    </p>
+                  </div>
+                  <p className="text-body-base text-on-surface-variant">{item.business_justification as string}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="font-stat-lg text-stat-lg text-primary">{item.rice_score as number}</p>
+                  <p className="font-label-caps text-label-caps text-on-surface-variant">RICE</p>
+                </div>
               </div>
-              <p className="text-xs text-[#8b8baa]">{item.business_justification as string}</p>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-2xl font-bold text-violet-400">{item.rice_score as number}</p>
-              <p className="text-xs text-[#4a4a6a]">RICE score</p>
-            </div>
-          </div>
 
-          {/* RICE breakdown */}
-          <div className="grid grid-cols-4 gap-2">
-            {[
-              { label: 'Reach', value: item.reach },
-              { label: 'Impact', value: item.impact },
-              { label: 'Confidence', value: (item.confidence as number)?.toFixed?.(1) },
-              { label: 'Effort', value: item.effort },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-[#09090f] rounded-lg p-3 text-center border border-[#2a2a3a]">
-                <p className="label mb-1">{label}</p>
-                <p className="text-base font-semibold text-[#f0f0f8]">{value as string}</p>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: 'Reach', value: item.reach },
+                  { label: 'Impact', value: item.impact },
+                  { label: 'Confidence', value: (item.confidence as number)?.toFixed?.(1) },
+                  { label: 'Effort', value: item.effort },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-surface-container-low rounded-lg p-3 text-center border border-outline-variant/30">
+                    <p className="font-label-caps text-label-caps text-on-surface-variant mb-1">{label}</p>
+                    <p className="font-body-bold text-on-surface">{value as string}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {item.revenue_risk && <span className="badge-critical">Revenue Risk</span>}
-            {item.retention_risk && <span className="badge-high">Retention Risk</span>}
-            <span className="badge-violet">
-              {(item.recommended_action as string)?.replace(/_/g, ' ')}
-            </span>
-            <span className="badge">
-              impact: {item.business_impact as string}
-            </span>
-          </div>
+            </div>
+          ))}
         </div>
-      ))}
+      </AgentCard>
 
-      {(prioritization.ranking_rationale as string) && (
-        <div className="card-sm space-y-1">
-          <p className="label">Ranking Rationale</p>
-          <p className="text-sm text-[#8b8baa]">{prioritization.ranking_rationale as string}</p>
-        </div>
-      )}
-
-      <details className="card-sm">
-        <summary className="text-xs text-[#4a4a6a] cursor-pointer hover:text-[#8b8baa] transition-colors">
-          Raw JSON output
+      <details className="bento-card">
+        <summary className="font-label-caps text-label-caps text-on-surface-variant cursor-pointer hover:text-on-surface transition-colors">
+          RAW JSON OUTPUT
         </summary>
-        <div className="mt-3"><JsonViewer data={prioritization} /></div>
+        <div className="mt-4"><JsonViewer data={prioritization} /></div>
       </details>
-    </div>
+    </motion.div>
   );
 }
 
@@ -214,210 +202,247 @@ function PlanningPanel({ planning }: { planning: Record<string, unknown> }) {
   const totalPoints = planning.total_story_points as number;
 
   return (
-    <div className="space-y-4 animate-fade-in">
-      {/* Summary row */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="card-sm text-center">
-          <p className="text-2xl font-bold text-violet-400">{tasks.length}</p>
-          <p className="label mt-1">Tasks</p>
-        </div>
-        <div className="card-sm text-center">
-          <p className="text-2xl font-bold text-emerald-400">{totalPoints || 0}</p>
-          <p className="label mt-1">Story Points</p>
-        </div>
-        <div className="card-sm text-center">
-          <p className="text-sm font-semibold text-amber-400 mt-1">{planning.sprint_recommendation as string || '—'}</p>
-          <p className="label mt-1">Sprint Estimate</p>
-        </div>
-      </div>
-
-      {/* Tasks */}
-      {tasks.map((task, idx) => {
-        const criteria = (task.acceptance_criteria as string[]) || [];
-        return (
-          <div key={idx} className="card space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <PriorityBadge value={task.priority as string} />
-                <p className="mono text-[#4a4a6a]">{task.task_id as string}</p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="badge">{task.effort_estimate as string}</span>
-                <span className="badge-violet">{task.story_points as number}pt</span>
-              </div>
-            </div>
-
-            <p className="text-sm font-medium text-[#f0f0f8]">{task.title as string}</p>
-            <p className="text-xs text-[#8b8baa] leading-relaxed">{task.description as string}</p>
-
-            <details>
-              <summary className="text-xs text-[#4a4a6a] cursor-pointer hover:text-[#8b8baa] transition-colors">
-                Technical approach
-              </summary>
-              <pre className="mt-2 text-xs text-[#8b8baa] whitespace-pre-wrap font-mono leading-relaxed bg-[#09090f] rounded-lg p-3 border border-[#2a2a3a]">
-                {task.technical_approach as string}
-              </pre>
-            </details>
-
-            {criteria.length > 0 && (
-              <div>
-                <p className="label mb-1.5">Acceptance Criteria</p>
-                <ul className="space-y-1">
-                  {criteria.map((c, i) => (
-                    <li key={i} className="flex items-start gap-2 text-xs text-[#8b8baa]">
-                      <span className="text-emerald-500 shrink-0 mt-0.5">✓</span>
-                      {c}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-4"
+    >
+      <AgentCard
+        name="Engineering Planner"
+        type="system"
+        icon="engineering"
+        status="idle"
+      >
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="text-center">
+            <p className="font-stat-lg text-stat-lg text-primary">{tasks.length}</p>
+            <p className="font-label-caps text-label-caps text-on-surface-variant">TASKS</p>
           </div>
-        );
-      })}
+          <div className="text-center">
+            <p className="font-stat-lg text-stat-lg text-emerald-400">{totalPoints || 0}</p>
+            <p className="font-label-caps text-label-caps text-on-surface-variant">POINTS</p>
+          </div>
+          <div className="text-center">
+            <p className="font-body-bold text-amber-400">{planning.sprint_recommendation as string || '—'}</p>
+            <p className="font-label-caps text-label-caps text-on-surface-variant">SPRINT</p>
+          </div>
+        </div>
 
-      {/* Release Notes */}
+        <div className="space-y-4">
+          {tasks.map((task, idx) => {
+            const criteria = (task.acceptance_criteria as string[]) || [];
+            return (
+              <div key={idx} className="space-y-3 pb-4 border-b border-outline-variant/30 last:border-0 last:pb-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <PriorityBadge2 value={task.priority as string} />
+                    <p className="font-code-block text-code-block font-mono text-on-surface-variant">
+                      {task.task_id as string}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="badge-secondary text-xs">{task.effort_estimate as string}</span>
+                    <span className="badge-primary text-xs">{task.story_points as number}pt</span>
+                  </div>
+                </div>
+
+                <p className="font-body-bold text-on-surface">{task.title as string}</p>
+                <p className="text-body-base text-on-surface-variant leading-relaxed">
+                  {task.description as string}
+                </p>
+
+                {criteria.length > 0 && (
+                  <div>
+                    <p className="font-label-caps text-label-caps text-on-surface-variant mb-2">
+                      ACCEPTANCE CRITERIA
+                    </p>
+                    <ul className="space-y-1">
+                      {criteria.map((c, i) => (
+                        <li key={i} className="flex items-start gap-2 text-body-base text-on-surface-variant">
+                          <span className="text-emerald-400 shrink-0 mt-0.5">✓</span>
+                          {c}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <details>
+                  <summary className="font-label-caps text-label-caps text-on-surface-variant cursor-pointer hover:text-on-surface transition-colors">
+                    TECHNICAL APPROACH
+                  </summary>
+                  <TerminalBlock>
+                    <pre className="whitespace-pre-wrap leading-relaxed">
+                      {task.technical_approach as string}
+                    </pre>
+                  </TerminalBlock>
+                </details>
+              </div>
+            );
+          })}
+        </div>
+      </AgentCard>
+
       {(planning.release_notes as string) && (
-        <div className="card space-y-3">
-          <p className="text-sm font-medium text-[#f0f0f8]">Release Notes Preview</p>
-          <div className="bg-[#09090f] rounded-lg p-4 border border-[#2a2a3a]">
-            <pre className="text-xs text-[#8b8baa] whitespace-pre-wrap font-mono leading-relaxed">
+        <BentoCard>
+          <p className="font-headline-md text-headline-md text-on-surface mb-4">
+            Release Notes Preview
+          </p>
+          <TerminalBlock>
+            <pre className="whitespace-pre-wrap leading-relaxed">
               {planning.release_notes as string}
             </pre>
-          </div>
-          {(planning.release_summary as string) && (
-            <p className="text-xs text-[#4a4a6a]">{planning.release_summary as string}</p>
-          )}
-        </div>
+          </TerminalBlock>
+        </BentoCard>
       )}
-    </div>
+
+      <details className="bento-card">
+        <summary className="font-label-caps text-label-caps text-on-surface-variant cursor-pointer hover:text-on-surface transition-colors">
+          RAW JSON OUTPUT
+        </summary>
+        <div className="mt-4"><JsonViewer data={planning} /></div>
+      </details>
+    </motion.div>
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
 export default function PipelineDetailPage() {
   const { id } = useParams();
   const [run, setRun] = useState<PipelineResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'analysis' | 'prioritization' | 'planning'>('analysis');
 
-  const fetchRun = async () => {
+  const fetchRun = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/pipeline/${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setRun(data);
-        if (data.status !== 'running') setLoading(false);
-      } else {
-        setLoading(false);
-      }
+      const data = await getPipelineRun(id as string);
+      setRun(data);
+      if (data.status !== 'running') setLoading(false);
     } catch {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => {
-    fetchRun();
-    // Poll while running
-    const interval = setInterval(() => {
-      if (run?.status === 'running' || !run) fetchRun();
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [id, run?.status]);
+  const shouldPoll = !run || run.status === 'running';
+  usePolling(fetchRun, 3000, shouldPoll);
 
   if (loading && !run) {
     return (
-      <div className="p-6">
-        <LoadingSpinner />
-      </div>
+      <AppLayout title="ProductOps AI">
+        <PageContainer>
+          <LoadingSpinner />
+        </PageContainer>
+      </AppLayout>
     );
   }
 
   if (!run) {
     return (
-      <div className="p-6 space-y-4">
-        <Link href="/" className="text-xs text-[#4a4a6a] hover:text-[#8b8baa] transition-colors">← Dashboard</Link>
-        <p className="text-sm text-[#8b8baa]">Pipeline run not found.</p>
-      </div>
+      <AppLayout title="ProductOps AI">
+        <PageContainer>
+          <Link href="/" className="text-body-base text-on-surface-variant hover:text-on-surface transition-colors">
+            ← Back to Mission Control
+          </Link>
+          <p className="text-body-base text-on-surface-variant mt-4">Pipeline run not found.</p>
+        </PageContainer>
+      </AppLayout>
     );
   }
 
   const tabs = [
-    { key: 'analysis' as const,       label: '1. Analysis',         ready: !!run.analysis },
-    { key: 'prioritization' as const, label: '2. Prioritization',   ready: !!run.prioritization },
-    { key: 'planning' as const,       label: '3. Engineering Plan',  ready: !!run.planning },
+    { key: 'analysis' as const, label: '1. Analysis', icon: 'psychology', ready: !!run.analysis },
+    { key: 'prioritization' as const, label: '2. Prioritization', icon: 'analytics', ready: !!run.prioritization },
+    { key: 'planning' as const, label: '3. Engineering Plan', icon: 'engineering', ready: !!run.planning },
   ];
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <Link href="/" className="text-xs text-[#4a4a6a] hover:text-[#8b8baa] transition-colors">
-            ← Dashboard
+    <AppLayout title="ProductOps AI">
+      <PageContainer
+        title="Pipeline Execution"
+        subtitle={
+          <>
+            <StatusBadge
+              variant={getStatusVariant(run.status)}
+              label={run.status.toUpperCase()}
+              pulse={run.status === 'running'}
+            />
+            <span className="font-code-block text-code-block font-mono text-on-surface-variant">
+              {run.run_id}
+            </span>
+            {run.duration_ms != null && (
+              <span className="font-label-caps text-label-caps text-on-surface-variant">
+                {(run.duration_ms / 1000).toFixed(2)}s
+              </span>
+            )}
+          </>
+        }
+        action={
+          <Link href="/" className="btn-secondary">
+            <span className="material-symbols-outlined text-sm">arrow_back</span>
+            Back to Mission Control
           </Link>
-          <h1 className="text-lg font-semibold text-[#f0f0f8] mt-1">Pipeline Run</h1>
-          <p className="mono text-[#4a4a6a] mt-0.5">{run.run_id}</p>
-        </div>
-        <div className="text-right shrink-0">
-          <div>
-            {run.status === 'completed' && <span className="badge-success">completed</span>}
-            {run.status === 'failed'    && <span className="badge-critical">failed</span>}
-            {run.status === 'running'   && <span className="badge-running">running</span>}
-          </div>
-          {run.duration_ms != null && (
-            <p className="text-xs text-[#4a4a6a] mt-1">{(run.duration_ms / 1000).toFixed(2)}s</p>
-          )}
-          <p className="text-xs text-[#4a4a6a]">{run.input_source}</p>
-        </div>
-      </div>
+        }
+      >
+        {run.status === 'running' && (
+          <BentoCard className="bg-amber-400/5 border-amber-400/20 mb-gutter">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-lg bg-amber-400/10 flex items-center justify-center">
+                <span className="material-symbols-outlined text-2xl text-amber-400 animate-spin-slow">
+                  settings
+                </span>
+              </div>
+              <div>
+                <p className="font-body-bold text-on-surface">Pipeline Running</p>
+                <p className="text-body-base text-on-surface-variant">
+                  Agents are processing feedback — results will appear below
+                </p>
+              </div>
+              <div className="ml-auto dot-warning" />
+            </div>
+          </BentoCard>
+        )}
 
-      {/* Running state */}
-      {run.status === 'running' && (
-        <div className="card-sm border-amber-500/20 bg-amber-500/5 flex items-center gap-3">
-          <div className="dot-running" />
-          <div>
-            <p className="text-sm text-amber-400 font-medium">Pipeline running</p>
-            <p className="text-xs text-[#8b8baa] mt-0.5">Agents are processing feedback — results will appear below</p>
-          </div>
-        </div>
-      )}
+        {run.status === 'failed' && run.error_message && (
+          <BentoCard className="bg-error/5 border-error/20 mb-gutter">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-2xl text-error">error</span>
+              <div>
+                <p className="font-body-bold text-error">Pipeline Failed</p>
+                <p className="text-body-base text-on-surface-variant">{run.error_message}</p>
+              </div>
+            </div>
+          </BentoCard>
+        )}
 
-      {/* Error state */}
-      {run.status === 'failed' && run.error_message && (
-        <div className="card-sm border-red-500/20 bg-red-500/5">
-          <p className="text-xs text-[#4a4a6a] mb-1">Error</p>
-          <p className="text-sm text-red-400">{run.error_message}</p>
-        </div>
-      )}
+        {run.status === 'completed' && (
+          <>
+            <div className="flex gap-2 mb-gutter">
+              {tabs.map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={
+                    tab === t.key
+                      ? 'flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary font-body-bold border border-primary/20'
+                      : 'flex items-center gap-2 px-4 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors'
+                  }
+                >
+                  <span className="material-symbols-outlined text-sm">{t.icon}</span>
+                  {t.label}
+                  {!t.ready && <span className="opacity-50">·</span>}
+                </button>
+              ))}
+            </div>
 
-      {/* Tab navigation */}
-      {run.status === 'completed' && (
-        <>
-          <div className="flex border-b border-[#2a2a3a] gap-1 -mb-6">
-            {tabs.map(t => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={tab === t.key ? 'tab-active' : 'tab'}
-              >
-                {t.label}
-                {!t.ready && <span className="ml-1 text-[#4a4a6a]">·</span>}
-              </button>
-            ))}
-          </div>
-
-          <div className="pt-6">
-            {tab === 'analysis'       && run.analysis       && <AnalysisPanel       analysis={run.analysis} />}
+            {tab === 'analysis' && run.analysis && <AnalysisPanel analysis={run.analysis} />}
             {tab === 'prioritization' && run.prioritization && <PrioritizationPanel prioritization={run.prioritization} />}
-            {tab === 'planning'       && run.planning        && <PlanningPanel       planning={run.planning} />}
+            {tab === 'planning' && run.planning && <PlanningPanel planning={run.planning} />}
 
-            {tab === 'analysis'       && !run.analysis       && <p className="text-sm text-[#4a4a6a]">Analysis output not available.</p>}
-            {tab === 'prioritization' && !run.prioritization && <p className="text-sm text-[#4a4a6a]">Prioritization output not available.</p>}
-            {tab === 'planning'       && !run.planning       && <p className="text-sm text-[#4a4a6a]">Planning output not available.</p>}
-          </div>
-        </>
-      )}
-    </div>
+            {tab === 'analysis' && !run.analysis && <p className="text-body-base text-on-surface-variant">Analysis output not available.</p>}
+            {tab === 'prioritization' && !run.prioritization && <p className="text-body-base text-on-surface-variant">Prioritization output not available.</p>}
+            {tab === 'planning' && !run.planning && <p className="text-body-base text-on-surface-variant">Planning output not available.</p>}
+          </>
+        )}
+      </PageContainer>
+    </AppLayout>
   );
 }

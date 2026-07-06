@@ -1,65 +1,37 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import {
+  getEvaluationHistory,
+  runEvaluation as runEvaluationApi,
+  getErrorMessage,
+} from '@/lib/api';
+import { formatDateTimeFull } from '@/lib/utils/date';
+import type { EvalHistory, EvalResult } from '@/types/evaluation';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { BentoCard } from '@/components/ui/BentoCard';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface EvalHistory {
-  eval_id: string;
-  created_at: string;
-  overall_score: number | null;
-  analysis_score: number | null;
-  prioritization_score: number | null;
-  planning_score: number | null;
-  test_cases_total: number;
-  test_cases_passed: number;
-}
-
-interface TestDetail {
-  test_id: string;
-  description: string;
-  input: string;
-  passed: boolean;
-  analysis_score: number;
-  prioritization_score: number;
-  planning_score: number;
-  overall_score: number;
-  analysis_details?: Record<string, unknown>;
-  prioritization_details?: Record<string, unknown>;
-  planning_details?: Record<string, unknown>;
-  error?: string;
-}
-
-interface EvalResult {
-  eval_id: string;
-  test_cases_total: number;
-  test_cases_passed: number;
-  analysis_score: number | null;
-  prioritization_score: number | null;
-  planning_score: number | null;
-  overall_score: number | null;
-  details: TestDetail[];
-}
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
 function ScoreBar({ score, label }: { score: number | null; label: string }) {
   const pct = score != null ? Math.round((score / 5) * 100) : 0;
   const color =
-    pct >= 70 ? 'bg-emerald-500' :
-    pct >= 40 ? 'bg-amber-500'  : 'bg-red-500';
+    pct >= 70 ? 'bg-emerald-400' :
+    pct >= 40 ? 'bg-amber-400'  : 'bg-error';
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <div className="flex justify-between items-center">
-        <span className="text-xs text-[#8b8baa]">{label}</span>
-        <span className="text-sm font-semibold text-[#f0f0f8]">
+        <span className="font-label-caps text-label-caps text-on-surface-variant">{label}</span>
+        <span className="font-body-bold text-on-surface">
           {score != null ? `${score.toFixed(2)}/5` : '—'}
         </span>
       </div>
-      <div className="h-1.5 bg-[#2a2a3a] rounded-full overflow-hidden">
-        <div
-          className={`h-full ${color} rounded-full transition-all duration-700`}
-          style={{ width: `${pct}%` }}
+      <div className="h-2 bg-surface-container-low rounded-full overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.7, ease: 'easeOut' }}
+          className={`h-full ${color} rounded-full`}
         />
       </div>
     </div>
@@ -67,32 +39,35 @@ function ScoreBar({ score, label }: { score: number | null; label: string }) {
 }
 
 function ScoreChip({ value }: { value: number | undefined }) {
-  if (value == null) return <span className="text-[#4a4a6a]">—</span>;
+  if (value == null) return <span className="text-on-surface-variant/50">—</span>;
   const color =
     value >= 4 ? 'text-emerald-400' :
-    value >= 3 ? 'text-amber-400'   : 'text-red-400';
-  return <span className={`font-mono text-xs font-medium ${color}`}>{value.toFixed(1)}</span>;
+    value >= 3 ? 'text-amber-400'   : 'text-error';
+  return <span className={`font-mono text-xs font-semibold ${color}`}>{value.toFixed(1)}</span>;
 }
 
 function PassRateBar({ passed, total }: { passed: number; total: number }) {
   const pct = total > 0 ? Math.round((passed / total) * 100) : 0;
   return (
-    <div className="space-y-1">
+    <div className="space-y-2">
       <div className="flex justify-between items-center">
-        <span className="text-xs text-[#8b8baa]">{passed}/{total} tests passed</span>
-        <span className="text-xs font-medium text-[#f0f0f8]">{pct}%</span>
+        <span className="font-label-caps text-label-caps text-on-surface-variant">
+          {passed}/{total} tests passed
+        </span>
+        <span className="font-body-bold text-on-surface">{pct}%</span>
       </div>
-      <div className="h-1.5 bg-[#2a2a3a] rounded-full overflow-hidden">
-        <div
-          className="h-full bg-violet-500 rounded-full transition-all duration-700"
-          style={{ width: `${pct}%` }}
+      <div className="h-2 bg-surface-container-low rounded-full overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.7, ease: 'easeOut' }}
+          className="h-full bg-primary rounded-full"
         />
       </div>
     </div>
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
 export default function EvaluatePage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<EvalResult | null>(null);
@@ -100,260 +75,277 @@ export default function EvaluatePage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedTest, setExpandedTest] = useState<string | null>(null);
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/evaluate`);
-      if (res.ok) setHistory(await res.json());
-    } catch { /* ignore */ }
-  };
+      const data = await getEvaluationHistory();
+      setHistory(data);
+    } catch {
+      // Silently ignore
+    }
+  }, []);
 
-  useEffect(() => { fetchHistory(); }, []);
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
-  const runEvaluation = async (subset?: string[]) => {
+  const runEvaluation = useCallback(async (subset?: string[]) => {
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const res = await fetch(`${API}/evaluate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ test_subset: subset ?? null }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(body.detail || 'Evaluation failed');
-      }
-      const data = await res.json();
+      const data = await runEvaluationApi({ test_subset: subset ?? null });
       setResult(data);
       fetchHistory();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
+      setError(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchHistory]);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-[#f0f0f8]">Evaluation</h1>
-          <p className="text-sm text-[#8b8baa] mt-1">
-            LLM-as-judge framework — 15 hand-crafted test cases across all feedback categories and severity levels.
-          </p>
-        </div>
-        <button
-          onClick={() => runEvaluation()}
-          disabled={loading}
-          className="btn-primary shrink-0"
-        >
-          {loading ? (
-            <>
-              <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin-slow" />
-              Running…
-            </>
-          ) : (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Run All Tests
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Info card */}
-      {!result && !loading && (
-        <div className="card-sm bg-violet-500/5 border-violet-500/20 space-y-3">
-          <p className="text-sm font-medium text-violet-300">How evaluation works</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { step: '1', label: 'Run pipeline', desc: 'Each test case runs through the full 3-agent pipeline' },
-              { step: '2', label: 'Judge with Gemini', desc: 'LLM-as-judge scores each stage: Analysis, Prioritization, Planning' },
-              { step: '3', label: 'Aggregate scores', desc: 'Results averaged across all 15 test cases, score range 1–5' },
-            ].map(s => (
-              <div key={s.step} className="flex gap-3">
-                <div className="w-6 h-6 rounded-full bg-violet-600 flex items-center justify-center shrink-0 text-xs font-bold text-white">
-                  {s.step}
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-[#f0f0f8]">{s.label}</p>
-                  <p className="text-xs text-[#8b8baa] mt-0.5">{s.desc}</p>
-                </div>
+    <AppLayout title="ProductOps AI">
+      <PageContainer
+        title="AI Evaluation Suite"
+        subtitle="LLM-as-judge framework — 15 hand-crafted test cases across all feedback categories"
+        action={
+          <button onClick={() => runEvaluation()} disabled={loading} className="btn-primary">
+            {loading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin-slow" />
+                Running…
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-sm">play_arrow</span>
+                Run All Tests
+              </>
+            )}
+          </button>
+        }
+      >
+        {!result && !loading && (
+          <BentoCard className="bg-primary/5 border-primary/20">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-2xl text-primary">science</span>
               </div>
-            ))}
-          </div>
-          <p className="text-xs text-[#4a4a6a]">⚠ Running all 15 tests calls Gemini ~45 times and takes 2–5 minutes.</p>
-        </div>
-      )}
-
-      {/* Loading state */}
-      {loading && (
-        <div className="card space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-4 h-4 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin-slow" />
-            <p className="text-sm text-[#f0f0f8] font-medium">Running evaluation…</p>
-          </div>
-          <p className="text-xs text-[#8b8baa]">
-            Executing 15 test cases through the pipeline and scoring with LLM-as-judge.
-            This will take 2–5 minutes. Please wait.
-          </p>
-          <div className="h-1 bg-[#2a2a3a] rounded-full overflow-hidden">
-            <div className="h-full bg-violet-500 rounded-full animate-pulse w-1/3" />
-          </div>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="card-sm border-red-500/20 bg-red-500/5">
-          <p className="text-xs text-[#4a4a6a] mb-1">Error</p>
-          <p className="text-sm text-red-400">{error}</p>
-        </div>
-      )}
-
-      {/* Results */}
-      {result && (
-        <div className="space-y-4 animate-fade-in">
-          {/* Score overview */}
-          <div className="card space-y-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-sm font-medium text-[#f0f0f8]">Evaluation Results</h2>
-                <p className="text-xs text-[#4a4a6a] mt-0.5 mono">{result.eval_id}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-3xl font-bold text-violet-400">
-                  {result.overall_score?.toFixed(2)}
-                  <span className="text-base text-[#4a4a6a] font-normal">/5</span>
+              <div className="space-y-3 flex-1">
+                <p className="font-headline-sm text-headline-sm text-on-surface">How Evaluation Works</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[
+                    { step: '1', label: 'Run pipeline', desc: 'Each test case runs through the full 3-agent pipeline', icon: 'route' },
+                    { step: '2', label: 'Judge with Gemini', desc: 'LLM-as-judge scores each stage: Analysis, Prioritization, Planning', icon: 'gavel' },
+                    { step: '3', label: 'Aggregate scores', desc: 'Results averaged across all 15 test cases, score range 1–5', icon: 'analytics' },
+                  ].map(s => (
+                    <div key={s.step} className="flex gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-base text-on-primary">{s.icon}</span>
+                      </div>
+                      <div>
+                        <p className="font-body-bold text-on-surface">{s.label}</p>
+                        <p className="text-body-base text-on-surface-variant mt-1">{s.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-body-base text-on-surface-variant">
+                  <span className="material-symbols-outlined text-sm align-middle mr-1">info</span>
+                  Running all 15 tests calls Gemini ~45 times and takes 2–5 minutes.
                 </p>
-                <p className="text-xs text-[#4a4a6a] mt-0.5">Overall Score</p>
               </div>
             </div>
+          </BentoCard>
+        )}
 
-            <PassRateBar passed={result.test_cases_passed} total={result.test_cases_total} />
-
-            <div className="space-y-3 pt-2 border-t border-[#2a2a3a]">
-              <ScoreBar score={result.analysis_score}       label="Analysis Quality (Feedback Analyzer)" />
-              <ScoreBar score={result.prioritization_score} label="Prioritization Quality (Business Prioritizer)" />
-              <ScoreBar score={result.planning_score}       label="Planning Quality (Engineering Planner)" />
-            </div>
-          </div>
-
-          {/* Per-test results */}
-          <div className="card p-0 overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#2a2a3a] flex items-center justify-between">
-              <h3 className="text-sm font-medium text-[#f0f0f8]">Test Case Results</h3>
-              <div className="flex items-center gap-3 text-xs text-[#4a4a6a]">
-                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" /> Pass</span>
-                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" /> Fail</span>
-                <span>A / P / E = Analysis / Prioritization / Engineering</span>
+        {loading && (
+          <BentoCard>
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin-slow" />
+              <div>
+                <p className="font-body-bold text-on-surface">Running evaluation…</p>
+                <p className="text-body-base text-on-surface-variant mt-1">
+                  Executing 15 test cases through the pipeline and scoring with LLM-as-judge. This will take 2–5 minutes.
+                </p>
               </div>
             </div>
-            <div className="divide-y divide-[#2a2a3a]">
-              {result.details.map((detail) => (
-                <div key={detail.test_id}>
-                  <button
-                    onClick={() => setExpandedTest(expandedTest === detail.test_id ? null : detail.test_id)}
-                    className="w-full flex items-start justify-between px-5 py-3.5 hover:bg-[#1a1a26] transition-colors text-left"
-                  >
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${detail.passed ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="mono text-[#f0f0f8]">{detail.test_id}</span>
-                          <span className="text-xs text-[#8b8baa] truncate">{detail.description}</span>
-                        </div>
-                        <p className="text-xs text-[#4a4a6a] mt-0.5 truncate max-w-sm">
-                          &ldquo;{detail.input}&rdquo;
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0 ml-4">
-                      <div className="flex items-center gap-1.5">
-                        <ScoreChip value={detail.analysis_score} />
-                        <span className="text-[#2a2a3a]">/</span>
-                        <ScoreChip value={detail.prioritization_score} />
-                        <span className="text-[#2a2a3a]">/</span>
-                        <ScoreChip value={detail.planning_score} />
-                      </div>
-                      <svg className={`w-4 h-4 text-[#4a4a6a] transition-transform duration-150 ${expandedTest === detail.test_id ? 'rotate-90' : ''}`}
-                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </button>
+            <div className="h-2 bg-surface-container-low rounded-full overflow-hidden mt-4">
+              <motion.div
+                initial={{ width: '30%' }}
+                animate={{ width: ['30%', '60%', '30%'] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                className="h-full bg-primary rounded-full"
+              />
+            </div>
+          </BentoCard>
+        )}
 
-                  {expandedTest === detail.test_id && (
-                    <div className="px-5 pb-4 space-y-3 bg-[#0d0d14] border-t border-[#2a2a3a] animate-fade-in">
-                      <div className="pt-3 grid grid-cols-3 gap-3">
-                        {[
-                          { label: 'Analysis', details: detail.analysis_details },
-                          { label: 'Prioritization', details: detail.prioritization_details },
-                          { label: 'Planning', details: detail.planning_details },
-                        ].map(({ label, details }) => details && (
-                          <div key={label} className="card-sm space-y-1.5">
-                            <p className="label">{label}</p>
-                            {(details.reasoning as string) && (
-                              <p className="text-xs text-[#8b8baa] leading-relaxed">
-                                {details.reasoning as string}
-                              </p>
-                            )}
+        {error && (
+          <BentoCard className="bg-error/5 border-error/20">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-2xl text-error">error</span>
+              <div>
+                <p className="font-body-bold text-error">Evaluation Failed</p>
+                <p className="text-body-base text-on-surface-variant">{error}</p>
+              </div>
+            </div>
+          </BentoCard>
+        )}
+
+        {result && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-gutter"
+          >
+            <BentoCard>
+              <div className="flex items-start justify-between gap-4 mb-6">
+                <div>
+                  <p className="font-headline-md text-headline-md text-on-surface">Evaluation Results</p>
+                  <p className="font-code-block text-code-block font-mono text-on-surface-variant mt-1">
+                    {result.eval_id}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-stat-xl text-stat-xl text-primary">
+                    {result.overall_score?.toFixed(2)}
+                    <span className="text-stat-lg text-on-surface-variant font-normal">/5</span>
+                  </p>
+                  <p className="font-label-caps text-label-caps text-on-surface-variant mt-1">OVERALL SCORE</p>
+                </div>
+              </div>
+
+              <PassRateBar passed={result.test_cases_passed} total={result.test_cases_total} />
+
+              <div className="space-y-4 pt-6 border-t border-outline-variant/30 mt-6">
+                <ScoreBar score={result.analysis_score} label="Analysis Quality (Feedback Analyzer)" />
+                <ScoreBar score={result.prioritization_score} label="Prioritization Quality (Business Prioritizer)" />
+                <ScoreBar score={result.planning_score} label="Planning Quality (Engineering Planner)" />
+              </div>
+            </BentoCard>
+
+            <BentoCard className="p-0 overflow-hidden">
+              <div className="px-6 py-4 border-b border-outline-variant/30 flex items-center justify-between">
+                <p className="font-headline-sm text-headline-sm text-on-surface">Test Case Results</p>
+                <div className="flex items-center gap-3 text-body-base text-on-surface-variant">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    Pass
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-error" />
+                    Fail
+                  </span>
+                  <span>A / P / E = Analysis / Prioritization / Engineering</span>
+                </div>
+              </div>
+              <div className="divide-y divide-outline-variant/30">
+                {result.details.map((detail) => (
+                  <div key={detail.test_id}>
+                    <button
+                      onClick={() => setExpandedTest(expandedTest === detail.test_id ? null : detail.test_id)}
+                      className="w-full flex items-start justify-between px-6 py-4 hover:bg-surface-container-high transition-colors text-left"
+                    >
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${detail.passed ? 'bg-emerald-400' : 'bg-error'}`} />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-code-block text-code-block font-mono text-on-surface">{detail.test_id}</span>
+                            <span className="text-body-base text-on-surface-variant truncate">{detail.description}</span>
                           </div>
-                        ))}
-                      </div>
-                      {detail.error && (
-                        <div className="card-sm border-red-500/20 bg-red-500/5">
-                          <p className="text-xs text-red-400">Error: {detail.error}</p>
+                          <p className="text-body-base text-on-surface-variant/70 mt-1 truncate max-w-md">
+                            &ldquo;{detail.input}&rdquo;
+                          </p>
                         </div>
-                      )}
+                      </div>
+                      <div className="flex items-center gap-4 shrink-0 ml-4">
+                        <div className="flex items-center gap-2">
+                          <ScoreChip value={detail.analysis_score} />
+                          <span className="text-outline-variant">/</span>
+                          <ScoreChip value={detail.prioritization_score} />
+                          <span className="text-outline-variant">/</span>
+                          <ScoreChip value={detail.planning_score} />
+                        </div>
+                        <span
+                          className={`material-symbols-outlined text-base text-on-surface-variant transition-transform duration-200 ${
+                            expandedTest === detail.test_id ? 'rotate-90' : ''
+                          }`}
+                        >
+                          chevron_right
+                        </span>
+                      </div>
+                    </button>
+
+                    {expandedTest === detail.test_id && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="px-6 pb-4 bg-surface-container border-t border-outline-variant/30"
+                      >
+                        <div className="pt-4 grid grid-cols-3 gap-4">
+                          {[
+                            { label: 'Analysis', details: detail.analysis_details },
+                            { label: 'Prioritization', details: detail.prioritization_details },
+                            { label: 'Planning', details: detail.planning_details },
+                          ].map(({ label, details }) => details && (
+                            <div key={label} className="p-4 rounded-lg bg-surface-container-low border border-outline-variant/30 space-y-2">
+                              <p className="font-label-caps text-label-caps text-on-surface-variant">{label.toUpperCase()}</p>
+                              {(details.reasoning as string) && (
+                                <p className="text-body-base text-on-surface-variant leading-relaxed">
+                                  {details.reasoning as string}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {detail.error && (
+                          <div className="mt-4 p-4 rounded-lg bg-error/5 border border-error/20">
+                            <p className="text-body-base text-error">Error: {detail.error}</p>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </BentoCard>
+          </motion.div>
+        )}
+
+        {!result && history.length > 0 && (
+          <BentoCard className="p-0 overflow-hidden">
+            <div className="px-6 py-4 border-b border-outline-variant/30">
+              <p className="font-headline-sm text-headline-sm text-on-surface">Evaluation History</p>
+            </div>
+            <div className="divide-y divide-outline-variant/30">
+              {history.map((h) => (
+                <div key={h.eval_id} className="flex items-center justify-between px-6 py-4">
+                  <div>
+                    <p className="font-code-block text-code-block font-mono text-on-surface">{h.eval_id.slice(0, 12)}…</p>
+                    <p className="text-body-base text-on-surface-variant mt-1">
+                      {formatDateTimeFull(h.created_at)} · {h.test_cases_passed}/{h.test_cases_total} passed
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-stat-lg text-stat-lg text-primary">
+                      {h.overall_score?.toFixed(2) ?? '—'}
+                      <span className="text-body-base text-on-surface-variant font-normal">/5</span>
+                    </p>
+                    <div className="flex gap-2 mt-1 justify-end">
+                      <ScoreChip value={h.analysis_score ?? undefined} />
+                      <span className="text-outline-variant text-xs">/</span>
+                      <ScoreChip value={h.prioritization_score ?? undefined} />
+                      <span className="text-outline-variant text-xs">/</span>
+                      <ScoreChip value={h.planning_score ?? undefined} />
                     </div>
-                  )}
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* History */}
-      {!result && history.length > 0 && (
-        <div className="card p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-[#2a2a3a]">
-            <h2 className="text-sm font-medium text-[#f0f0f8]">Evaluation History</h2>
-          </div>
-          <div className="divide-y divide-[#2a2a3a]">
-            {history.map((h) => (
-              <div key={h.eval_id} className="flex items-center justify-between px-5 py-3.5">
-                <div>
-                  <p className="mono text-[#f0f0f8]">{h.eval_id.slice(0, 12)}…</p>
-                  <p className="text-xs text-[#4a4a6a] mt-0.5">
-                    {new Date(h.created_at).toLocaleString()} · {h.test_cases_passed}/{h.test_cases_total} passed
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold text-violet-400">
-                    {h.overall_score?.toFixed(2) ?? '—'}
-                    <span className="text-xs text-[#4a4a6a] font-normal">/5</span>
-                  </p>
-                  <div className="flex gap-1 mt-0.5 justify-end">
-                    <ScoreChip value={h.analysis_score ?? undefined} />
-                    <span className="text-[#2a2a3a] text-xs">/</span>
-                    <ScoreChip value={h.prioritization_score ?? undefined} />
-                    <span className="text-[#2a2a3a] text-xs">/</span>
-                    <ScoreChip value={h.planning_score ?? undefined} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+          </BentoCard>
+        )}
+      </PageContainer>
+    </AppLayout>
   );
 }
