@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/logo.png" alt="ProductOps AI Logo" width="120" height="120" />
+  <img src="docs/logo.svg" alt="ProductOps AI Logo" width="120" height="120" />
 
   <h1>ProductOps AI</h1>
 
@@ -13,7 +13,7 @@
     <img src="https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js" alt="Next.js 15">
     <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 5">
     <img src="https://img.shields.io/badge/Google%20ADK-SequentialAgent-4285F4?style=flat-square&logo=google&logoColor=white" alt="Google ADK">
-    <img src="https://img.shields.io/badge/Powered%20by-Gemini%202.0%20Flash-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Powered by Gemini 2.0 Flash">
+    <img src="https://img.shields.io/badge/Powered%20by-GPT--4.1-412991?style=for-the-badge&logo=openai&logoColor=white" alt="Powered by GPT-4.1">
     <img src="https://img.shields.io/badge/MCP-FastMCP-orange?style=flat-square" alt="MCP">
   </p>
 
@@ -51,32 +51,41 @@ Each step requires domain expertise, introduces subjective bias, and scales line
 
 ProductOps AI is a **3-agent sequential pipeline** built on [Google Agent Development Kit (ADK)](https://google.github.io/adk-docs/) that automates the complete feedback-to-engineering-task lifecycle:
 
-```
-Raw Customer Feedback
-        |
-        v
-+-----------------------------------------------+
-|         ProductOps Orchestrator (ADK)          |
-|           SequentialAgent Pipeline             |
-|                                                |
-|  Stage 1: Feedback Analyzer                    |
-|    Tools: categorize, sentiment, entities      |
-|    Output: category, severity, sentiment       |
-|               |                                |
-|               v  (session state)               |
-|  Stage 2: Business Prioritizer                 |
-|    Tools: RICE score, impact, ranking          |
-|    Output: prioritized items, urgency          |
-|               |                                |
-|               v  (session state)               |
-|  Stage 3: Engineering Planner                  |
-|    Tools: tasks, effort, release notes         |
-|    Output: sprint-ready engineering plan        |
-+-----------------------------------------------+
-        |
-        v
-  Structured JSON Output + SQLite Persistence
-  + Long-Term Agent Memory
+```mermaid
+flowchart LR
+
+A["Customer Feedback"] --> B["ProductOps Orchestrator"]
+
+subgraph AGENTS["Sequential Multi-Agent Pipeline"]
+
+F["Feedback Analyzer"]
+
+P["Business Prioritizer"]
+
+E["Engineering Planner"]
+
+F -->|"Shared Session State"| P
+P -->|"Shared Session State"| E
+
+end
+
+B --> F
+
+F --> O1["Category<br/>Severity<br/>Sentiment"]
+
+P --> O2["Priority<br/>RICE Score<br/>Impact"]
+
+E --> O3["Sprint Tasks<br/>Engineering Plan<br/>Release Notes"]
+
+O1 --> R["Structured JSON"]
+
+O2 --> R
+
+O3 --> R
+
+R --> DB[(SQLite Database)]
+
+R --> MEM[(Agent Memory)]
 ```
 
 Each agent is an ADK `LlmAgent` with dedicated `FunctionTool` instances. Inter-agent communication flows exclusively through ADK session state using `output_key` / `input_key` semantics. The pipeline is fully deterministic — same input produces structurally consistent output.
@@ -109,7 +118,7 @@ graph TB
         end
 
         subgraph Gateway["LLM Gateway"]
-            GW[Round-Robin Router]
+            GW[Provider Router]
             CB[Circuit Breaker]
             MF[Model Fallback]
             PM[Provider Metrics]
@@ -126,7 +135,7 @@ graph TB
     Client -->|HTTP REST| API
     API --> Pipeline
     Pipeline --> Gateway
-    Gateway -->|Gemini 2.0 Flash| LLM[Google Gemini API]
+    Gateway -->|GPT-4.1| LLM[OpenAI API]
     API --> MCP
     API --> MEM
     API --> EVAL
@@ -146,7 +155,7 @@ sequenceDiagram
     participant FA as Feedback Analyzer
     participant BP as Business Prioritizer
     participant EP as Engineering Planner
-    participant LLM as Gemini 2.0 Flash
+    participant LLM as GPT-4.1
     participant DB as SQLite
 
     U->>API: POST /api/v1/pipeline {feedback_text}
@@ -193,28 +202,24 @@ sequenceDiagram
 ```mermaid
 graph LR
     subgraph Gateway["LLM Gateway"]
-        RR[Round-Robin<br/>Router]
+        RR[Provider<br/>Router]
         CB1[Circuit Breaker<br/>60s Cooldown]
-        FB[Model Fallback<br/>gemini-1.5-flash]
+        FB[Model Fallback]
         MT[Metrics<br/>Tracker]
     end
 
-    subgraph Pool["API Key Pool"]
-        K1[Key 1]
-        K2[Key 2]
-        K3[Key N]
+    subgraph Provider["OpenAI Provider"]
+        K1[API Key]
     end
 
     RR --> K1
-    RR --> K2
-    RR --> K3
-    K1 -->|429 / Quota| CB1
-    CB1 -->|Skip Key| RR
+    K1 -->|429 / Rate Limit| CB1
+    CB1 -->|Retry After Cooldown| RR
     K1 -->|5xx Error| FB
     K1 -->|Success| MT
 ```
 
-The gateway supports **provider-agnostic routing**. The current implementation uses Gemini providers. The architecture is extensible to OpenAI, Anthropic, and other providers via the `LLMProvider` abstract base class.
+The gateway uses a **provider-agnostic architecture** via the `LLMProvider` abstract base class. The current deployment routes all requests through OpenAI (GPT-4.1). The architecture is extensible to Gemini, Anthropic, and other providers by implementing the `LLMProvider` interface.
 
 ---
 
@@ -230,8 +235,8 @@ This project demonstrates production-grade usage of the Google Agent Development
 | Session State (`output_key`) | Inter-agent data flow via typed session state keys | All agent files |
 | `InMemorySessionService` | Session lifecycle management with per-run isolation | `orchestrator.py` |
 | `Runner.run_async()` | Async event-driven pipeline execution | `orchestrator.py` |
-| Structured Output (JSON mode) | `response_mime_type="application/json"` on all agents | All agent files |
-| Model Configuration | Dynamic model selection via `settings.agent_model` | `config.py` |
+| Structured Output (JSON mode) | JSON response format enforced on all agents | All agent files |
+| Model Configuration | Dynamic model selection via `settings.agent_model` (currently `gpt-4.1`) | `config.py` |
 
 ### Session State Flow
 
@@ -285,16 +290,16 @@ The MCP server enables any future data source (Slack, email, Jira webhooks) to f
 | 2. Prioritization | `business_prioritizer` | `calculate_rice_score`, `estimate_business_impact`, `rank_feedback_items` | RICE scores, urgency, business impact, recommended action |
 | 3. Planning | `engineering_planner` | `estimate_effort`, `generate_engineering_tasks`, `generate_release_notes` | Sprint-ready tasks, story points, release notes |
 
-### LLM Gateway with Key Pooling
+### LLM Gateway with Provider Abstraction
 
-- **Round-robin routing** across multiple API keys
+- **Provider-agnostic routing** via `LLMProvider` abstract base class
 - **Circuit breaker** with 60-second cooldown on rate-limited keys
-- **Model fallback** from primary (`gemini-2.0-flash`) to fallback (`gemini-1.5-flash`)
-- **Per-key metrics** tracking request counts, error rates, average latency
+- **Model fallback** on transient errors
+- **Per-provider metrics** tracking request counts, error rates, average latency
 
 ### Retry with Exponential Backoff
 
-Pipeline execution includes automatic retry (3 attempts, 2s-30s exponential delay) with fresh session isolation per attempt. Each retry selects a different API key from the gateway pool.
+Pipeline execution includes automatic retry (3 attempts, 2s-30s exponential delay) with fresh session isolation per attempt to prevent stale state pollution.
 
 ### Long-Term Agent Memory
 
@@ -302,7 +307,7 @@ Completed pipeline results are persisted to SQLite and accessible via API. Memor
 
 ### Evaluation Framework (LLM-as-Judge)
 
-15 hand-crafted test cases evaluated by a 3-rubric LLM judge system. Each pipeline stage is scored independently on a 1-5 scale across 4 dimensions.
+15 hand-crafted test cases evaluated by a 3-rubric LLM-as-Judge system powered by GPT-4.1. Each pipeline stage is scored independently on a 1-5 scale across 4 dimensions.
 
 ### Frontend Dashboard
 
@@ -321,7 +326,7 @@ Completed pipeline results are persisted to SQLite and accessible via API. Memor
 
 - Python 3.11 or later
 - Node.js 20 or later
-- A Google Gemini API key from [Google AI Studio](https://aistudio.google.com/)
+- An OpenAI API key from [platform.openai.com](https://platform.openai.com/api-keys)
 
 ### 1. Clone and Configure
 
@@ -334,13 +339,7 @@ cp .env.example .env
 Edit `.env` and set your API key:
 
 ```env
-GOOGLE_API_KEY=your_gemini_api_key_here
-```
-
-For multi-key pooling (optional):
-
-```env
-GOOGLE_API_KEYS=key_1,key_2,key_3
+OPENAI_API_KEY=sk-your_openai_api_key_here
 ```
 
 ### 2. Install Backend Dependencies
@@ -390,6 +389,7 @@ npm run dev
 | API Documentation | [http://localhost:8000/docs](http://localhost:8000/docs) |
 | Health Check | [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health) |
 | Gateway Stats | [http://localhost:8000/api/v1/gateway/stats](http://localhost:8000/api/v1/gateway/stats) |
+| OpenAI Model | GPT-4.1 via Google ADK |
 
 ---
 
@@ -568,7 +568,7 @@ Each pipeline stage is evaluated on 4 dimensions, scored 1-5:
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
 | Agent Framework | [Google ADK](https://google.github.io/adk-docs/) | Multi-agent orchestration, session state, tool binding |
-| LLM | Gemini 2.0 Flash | Agent reasoning, structured JSON generation, evaluation judging |
+| LLM | OpenAI GPT-4.1 | Agent reasoning, structured JSON generation, evaluation judging |
 | Protocol | [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) | Standardized data ingestion via FastMCP server |
 | Backend | FastAPI + Pydantic v2 | Async REST API with automatic OpenAPI documentation |
 | Database | SQLite + SQLAlchemy (async) | Pipeline persistence, evaluation results, agent memory |
@@ -661,13 +661,14 @@ productops-ai/
 | 3 agents, not 1 monolithic prompt | Each agent has a focused responsibility with dedicated tools, enabling independent testing, debugging, and iteration |
 | ADK SequentialAgent, not dynamic routing | Production systems need deterministic execution order; dynamic routing adds coordination overhead without clear benefit for a linear pipeline |
 | SQLite, not PostgreSQL | Eliminates infrastructure dependency; sufficient for demonstration scale; zero-config setup |
-| Gemini 2.0 Flash, not Pro | 10x lower cost, sub-second latency, sufficient reasoning capability for structured extraction and scoring |
+| GPT-4.1, not GPT-4o | Superior structured output reliability for JSON-heavy agent workflows; strong instruction following for multi-tool call sequences |
 | MCP for data ingestion | Standardized protocol enables any future data source (Slack, email, Jira) without modifying agent code |
 | LLM-as-Judge evaluation | Evaluates semantic quality of agent outputs (not just format), more meaningful than regex-based assertions |
 | LLM Gateway with key pooling | Distributes load across multiple API keys with automatic failover, preventing single-key rate limit exhaustion |
+| OpenAI via Google ADK | ADK's model parameter accepts any provider-compatible model string; swapping from Gemini to GPT-4.1 required only a config change, no agent code modifications |
 | Session state for inter-agent communication | Native ADK pattern; avoids external message queues; state is scoped to a single run and garbage-collected |
 | Background task execution | Non-blocking API design; client polls for completion; prevents HTTP timeout on long-running pipelines |
-| Provider-agnostic gateway | `LLMProvider` ABC enables adding OpenAI, Anthropic, or other providers without modifying pipeline logic |
+| Provider-agnostic gateway | `LLMProvider` ABC enables swapping between OpenAI, Gemini, Anthropic, or other providers without modifying pipeline logic |
 
 ---
 
@@ -771,6 +772,5 @@ ProductOps AI ships with three ADK-compatible skill specifications:
 ---
 
 <div align="center">
-  <sub>Built with Google ADK, Gemini 2.0 Flash, MCP, FastAPI, Next.js, and TypeScript.</sub>
+  <sub>Built with Google ADK, OpenAI GPT-4.1, MCP, FastAPI, Next.js, and TypeScript.</sub>
 </div>
-
